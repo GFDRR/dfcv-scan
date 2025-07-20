@@ -2,6 +2,9 @@ weights:
     earthquake: 1
     landslide: 1
     cyclone: 1
+    pluvial_defended: 1
+    fluvial_defended: 1
+    #coastal_defended: 1
     #tsunami_rp100: 0
     #extreme_heat_rp100: 1
     #wildfire_rp10: 0
@@ -22,7 +25,10 @@ threshold:
     global_tsunami_rp100: 1
     global_wildfire_rp10: 20
     global_extreme_heat_rp100: 46
-    fathom: 50
+    coastal_defended: 50
+    pluvial_defended: 50
+    fluvial_defended: 50
+    
 
 nodata: 
     global_landslide: [0, 255]
