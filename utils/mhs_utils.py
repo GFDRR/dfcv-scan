@@ -19,6 +19,7 @@ def calculate_multihazard_score(
             if suffix is not None:
                 hazard = f"{hazard}_{suffix}"
 
+            #if hazard in 
             mhs = mhs + (data[hazard] * (weight))
             total_weight += weight
 

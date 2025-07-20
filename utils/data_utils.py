@@ -16,6 +16,10 @@ import subprocess
 logging.basicConfig(level=logging.INFO)
 
 
+def _build_filename(iso_code, name, out_dir, ext="geojson"):
+    return os.path.join(out_dir, f"{iso_code.upper()}_{name.upper()}.{ext}")
+
+
 def _aggregate_acled(
     admin: gpd.GeoDataFrame,
     acled_file: str,
