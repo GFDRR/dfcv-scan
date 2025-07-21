@@ -1,10 +1,10 @@
-weights:
+hazards:
     earthquake: 1
     landslide: 1
     cyclone: 1
-    #pluvial_defended: 1
-    #fluvial_defended: 1
-    #coastal_defended: 1
+    pluvial_defended: 1
+    fluvial_defended: 1
+    coastal_defended: 1
     #tsunami_rp100: 0
     #extreme_heat_rp100: 1
     #wildfire_rp10: 0
@@ -28,7 +28,6 @@ threshold:
     coastal_defended: 50
     pluvial_defended: 50
     fluvial_defended: 50
-    
 
 nodata: 
     global_landslide: [0, 255]
@@ -44,3 +43,4 @@ urls:
     global_landslide_url: "https://datacatalogfiles.worldbank.org/ddh-published/0037584/DR0045417/LS_TH_COG.tif"
     global_earthquake_url: "https://cloud.openquake.org/s/6SnFk2f92JEr76H/download/GEM-GSHM_PGA-475y-rock_v2023.zip" 
     global_cyclone_url: "https://data.humdata.org/dataset/6366ac1f-6bed-42e9-b96e-22ef81008931/resource/202221dd-a79d-4ce5-93d7-f34f7514aeb2/download/viento-mundo-tr100-int1-g152.zip" 
+    naturalearth_coastline: "https://github.com/martynafford/natural-earth-geojson/blob/master/10m/physical/ne_10m_coastline.json"

@@ -1,0 +1,16 @@
+choropleth:
+    title: "{} in {}"
+    title_loc: "left"
+    figsize_x: 8
+    figsize_y: 8
+    dpi: 200
+    crs: "EPSG:3857"
+
+choropleth_folium:
+    adm_level: "ADM3"
+    tiles: 'cartodbpositron'
+    zoom_start: 5
+    fill_opacity: 0.8
+    fill_color: "YlGn"
+    line_color: "gray"
+    meter_crs: "EPSG:3857"
