@@ -75,7 +75,7 @@ class DatasetManager:
 
         self.data_dir = os.path.join(os.getcwd(), data_dir)
         self.local_dir = os.path.join(os.getcwd(), data_dir, iso_code)
-        self.global_dir = os.path.join(os.getcwd(), data_dir, global_name)
+        self.global_dir = os.path.join(os.getcwd(), data_dir, self.global_name)
         
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.local_dir, exist_ok=True)
@@ -91,9 +91,11 @@ class DatasetManager:
 
 
     def generate_datasets(self) -> gpd.GeoDataFrame:
+        logging.info("Loading geoboundary...")
         self.geoboundary = self.download_geoboundary()
     
         data = []
+        logging.info("Loading hazard layers...")
         self.hazards = self.download_hazards()
         self.fathom = self.download_fathom()
 
@@ -102,17 +104,51 @@ class DatasetManager:
                 dataset = dataset.mask(dataset.isna(), 0)
                 data.append(dataset)
 
+        logging.info("Loading conflict data...")
         self.acled = self.download_acled()
         self.acled_agg = self.download_acled(aggregate=True)
         if self.acled_agg is not None:
             data.append(self.acled_agg)
     
-        data = data_utils._merge_data(data, columns=self.merge_columns)
+        data = data_utils._merge_data(data, columns=self.merge_columns)    
+        data = self.calculate_multihazard_score(data)
+    
+        return data
+
+
+    def calculate_multihazard_score(
+        self,
+        data: gpd.GeoDataFrame,
+        conflict_column: str = "dfcv_conflict",
+        suffixes = ["exposure_relative", "exposure"]
+    ):
         for column in data.columns:
             if "exposure" in column:
                 data[f"{column}_relative"] = data[column] / data[self.asset]
+                data[f"{column}_relative_to_total"] = data[column] / data["worldpop"].sum()
     
-        data = data_utils.calculate_multihazard_score(data)
+        for suffix in suffixes:
+            mhs, total_weight = 0, 0
+            for hazard, weight in self.config["hazards"].items():
+                if suffix is not None:
+                    hazard = f"{hazard}_{suffix}"
+    
+                if hazard in data.columns:
+                    mhs = mhs + (data[hazard] * (weight))
+                    total_weight += weight
+    
+            mhs = mhs / (total_weight)
+    
+            mhs_name = "mhs"
+            if suffix is not None:
+                mhs_name = f"{mhs_name}_{suffix}"
+            data[mhs_name] = mhs
+    
+            mhsc_name = f"mhs_{conflict_column}"
+            if suffix is not None:
+                mhsc_name = f"{mhsc_name}_{suffix}"
+    
+            data[mhsc_name] = data[mhs_name] * data[f"{conflict_column}_{suffix}"]
     
         return data
 
