@@ -2,8 +2,8 @@ weights:
     earthquake: 1
     landslide: 1
     cyclone: 1
-    pluvial_defended: 1
-    fluvial_defended: 1
+    #pluvial_defended: 1
+    #fluvial_defended: 1
     #coastal_defended: 1
     #tsunami_rp100: 0
     #extreme_heat_rp100: 1
