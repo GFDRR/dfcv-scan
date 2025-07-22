@@ -84,29 +84,25 @@ class DatasetManager:
         self.asset_file = self._build_filename(iso_code, asset, self.local_dir, ext="tif")
         self.merge_columns = ["iso_code", adm_level, f"{adm_level}_ID", "geometry"]
 
-        self.hazards = None
-        self.fathom = None
-        self.acled = None
-        self.acled_agg = None
-
-
-    def generate_datasets(self) -> gpd.GeoDataFrame:
         logging.info("Loading geoboundary...")
         self.geoboundary = self.download_geoboundary()
-    
-        data = []
+        
         logging.info("Loading hazard layers...")
         self.hazards = self.download_hazards()
         self.fathom = self.download_fathom()
+        
+        logging.info("Loading conflict data...")
+        self.acled = self.download_acled()
+        self.acled_agg = self.download_acled(aggregate=True)
 
+
+    def generate_datasets(self) -> gpd.GeoDataFrame:
+        data = []
         for dataset in [self.hazards, self.fathom]:
             if dataset is not None:
                 dataset = dataset.mask(dataset.isna(), 0)
                 data.append(dataset)
 
-        logging.info("Loading conflict data...")
-        self.acled = self.download_acled()
-        self.acled_agg = self.download_acled(aggregate=True)
         if self.acled_agg is not None:
             data.append(self.acled_agg)
     
