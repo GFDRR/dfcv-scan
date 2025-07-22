@@ -1,16 +1,29 @@
 choropleth:
-    title: "{} in {}"
-    title_loc: "left"
-    figsize_x: 8
-    figsize_y: 8
-    dpi: 200
+    figsize_x: 10
+    figsize_y: 10
+    dpi: 300
     crs: "EPSG:3857"
+    legend: False
+    edgecolor: "lightgrey"
+    lw: 0.4
+    font_type: "Roboto"
+    title: "{} in {}"
+    title_x: 0.15
+    title_y: 0.89
+    title_fontsize: 15
+    subtitle_x: 0.15
+    subtitle_y: 0.875
+    subtitle_fontsize: 10
+    palette_name: "YlGnBu"
+    create_cmap: False
+    cmap_type: "continuous"
 
-choropleth_folium:
+folium:
     adm_level: "ADM3"
     tiles: 'cartodbpositron'
-    zoom_start: 5
-    fill_opacity: 0.8
-    fill_color: "YlGn"
-    line_color: "gray"
+    zoom_start: 8
+    fill_opacity: 0.9
+    fill_color: "YlGnBu"
+    line_color: "lightgrey"
     meter_crs: "EPSG:3857"
+    acled_group_name: 'ACLED Conflict Events'
