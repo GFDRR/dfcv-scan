@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import requests
 import logging
@@ -82,7 +83,7 @@ class DatasetManager:
         os.makedirs(self.global_dir, exist_ok=True)
 
         self.asset_file = self._build_filename(iso_code, asset, self.local_dir, ext="tif")
-        self.merge_columns = ["iso_code", adm_level, f"{adm_level}_ID", "geometry"]
+        self.merge_columns = []
 
         logging.info("Loading geoboundary...")
         self.geoboundary = self.download_geoboundary()
@@ -96,7 +97,7 @@ class DatasetManager:
         self.acled_agg = self.download_acled(aggregate=True)
 
 
-    def generate_datasets(self) -> gpd.GeoDataFrame:
+    def combine_datasets(self) -> gpd.GeoDataFrame:
         data = []
         for dataset in [self.hazards, self.fathom]:
             if dataset is not None:
@@ -116,12 +117,11 @@ class DatasetManager:
         self,
         data: gpd.GeoDataFrame,
         conflict_column: str = "dfcv_conflict",
-        suffixes = ["exposure_relative", "exposure"]
+        suffixes = ["exposure_relative"]
     ):
         for column in data.columns:
             if "exposure" in column:
                 data[f"{column}_relative"] = data[column] / data[self.asset]
-                data[f"{column}_relative_to_total"] = data[column] / data["worldpop"].sum()
     
         for suffix in suffixes:
             mhs, total_weight = 0, 0
@@ -149,38 +149,31 @@ class DatasetManager:
         return data
 
     
-    def download_geoboundary(self) -> gpd.GeoDataFrame:
+    def download_geoboundary(self, source: str = 'gadm') -> gpd.GeoDataFrame:
         out_file = self._build_filename(
             self.iso_code, self.adm_level, self.local_dir, ext="geojson"
         )
-    
-        gbhumanitarian_url = self.config["urls"]["gbhumanitarian_url"]
-        gbopen_url = self.config["urls"]["gbopen_url"]
-    
+
         if self.overwrite or not os.path.exists(out_file):
             logging.info(f"Downloading geoboundary for {self.iso_code}...")
-            url = f"{gbhumanitarian_url}{self.iso_code}/{self.adm_level}/"
-            try:
-                r = requests.get(url)
-                download_path = r.json()["gjDownloadURL"]
-            except Exception:
-                # Fallback to GBOpen URL if GBHumanitarian URL fails
-                url = f"{gbopen_url}{self.iso_code}/{self.adm_level}/"
-                r = requests.get(url)
-                download_path = r.json()["gjDownloadURL"]
-    
-            # Download and save the GeoJSON data
-            geoboundary = requests.get(download_path).json()
-            with open(out_file, "w") as file:
-                geojson.dump(geoboundary, file)
-    
-            # Read the downloaded GeoJSON into a GeoDataFrame
+            self.download_url(source, dataset_name=self.adm_level, ext="geojson")
             geoboundary = gpd.read_file(out_file)
-            geoboundary["iso_code"] = self.iso_code
-    
-            # Select relevant columns and rename them
-            geoboundary = geoboundary[["iso_code", "shapeName", "shapeID", "geometry"]]
-            geoboundary.columns = ["iso_code", self.adm_level, f"{self.adm_level}_ID", "geometry"]
+            
+
+            rename = dict()
+            for index in range(int(self.adm_level[-1])+1):
+                if index == 0:
+                    rename[f'GID_{index}'] = 'iso_code'
+                else:
+                    rename[f'GID_{index}'] = f'ADM{index}_ID'
+                    rename[f'NAME_{index}'] = f'ADM{index}'
+
+            geoboundary = geoboundary.rename(columns=rename)
+            all_columns = list(rename.values()) + ['geometry']
+            geoboundary = geoboundary[all_columns]
+            geoboundary.to_file(out_file)
+
+            self.merge_columns = all_columns
             logging.info(f"Geoboundary file saved to {out_file}.")
             geoboundary.to_file(out_file, engine="fiona")
     
@@ -391,27 +384,32 @@ class DatasetManager:
             columns=[f"{self.adm_level}_ID"],
             how="left",
         )
-        agg["conflict_exposure"] = agg["population_best"] / (
+        agg["acled_conflict_exposure"] = agg["population_best"] / (
             agg["conflict_count"] - agg["null_conflict_count"].fillna(0)
         )
         agg.to_file(agg_file)
         return agg
 
     
-    def download_url(self, dataset: str):    
-        dataset_name = dataset.replace(f"{self.global_name.lower()}_", "")
+    def download_url(self, dataset: str, dataset_name: str = None, ext: str = "tif"):  
+        if dataset_name is None:
+            dataset_name = dataset.replace(f"{self.global_name.lower()}_", "")
         global_file = self._build_filename(
             self.global_name, dataset_name, self.global_dir, ext="tif"
         )
-    
         url_name = f"{dataset}_url"
         if url_name in self.config["urls"]:
-            url = self.config["urls"][url_name].format(self.iso_code, self.iso_code.lower())
+            if dataset == 'gadm':
+                url = self.config["urls"][url_name].format(self.iso_code, self.adm_level[-1])
+            else:
+                url = self.config["urls"][url_name].format(self.iso_code, self.iso_code.lower())
+                
+        logging.info(f"Downloading {url}...")
     
         if self.global_name.lower() in dataset:
             if not os.path.exists(global_file):
                 if url.endswith(".zip"):
-                    self.download_zip(url, dataset, out_file=global_file)
+                    self.download_zip(url, dataset, out_file=global_file, ext=ext)
                 elif url.endswith(".tif"):
                     urllib.request.urlretrieve(url, global_file)
     
@@ -424,43 +422,61 @@ class DatasetManager:
             data_utils._clip_raster(global_file, local_file, admin, nodata)
     
         else:
-            local_file = self._build_filename(self.iso_code, dataset, self.local_dir, ext="tif")
-    
+            local_file = self._build_filename(self.iso_code, dataset_name, self.local_dir, ext)
             if not os.path.exists(local_file):
+                if url.endswith(".zip"):
+                    self.download_zip(url, dataset, out_file=local_file, ext=ext)
                 if url.endswith(".tif"):
                     urllib.request.urlretrieve(url, local_file)
     
         return local_file
 
         
-    def download_zip(self, url: str, dataset: str, out_file: str):
-        zip_file = os.path.join(self.global_dir, f"{dataset}.zip")
-        zip_dir = os.path.join(self.global_dir, dataset)
+    def download_zip(self, url: str, dataset: str, out_file: str, ext: str = "tif"):
+        out_dir = self.global_dir  if 'global' in dataset else self.local_dir
+        zip_file = os.path.join(out_dir, f"{dataset}.zip")
+        zip_dir = os.path.join(out_dir, dataset)
     
         if not os.path.exists(zip_file):
             urllib.request.urlretrieve(url, zip_file)
             with zipfile.ZipFile(zip_file, "r") as zip_ref:
                 zip_ref.extractall(zip_dir)
             os.remove(zip_file)
-    
-        tif_files = [file for file in os.listdir(zip_dir) if file.endswith(".tif")]
-        if len(tif_files) == 0:
-            grd_file = [file for file in os.listdir(zip_dir) if file.endswith(".grd")][0]
-            tif_file = os.path.join(zip_dir, grd_file.replace(".grd", ".tif"))
-            subprocess.run(
-                [
-                    "gdal_translate",
-                    "-a_srs",
-                    "EPSG:4326",
-                    os.path.join(zip_dir, grd_file),
-                    tif_file,
-                ]
-            )
-        else:
-            tif_file = tif_files[0]
-    
-        shutil.copyfile(os.path.join(zip_dir, tif_file), out_file)
-        shutil.rmtree(zip_dir)
+
+        if ext == "tif":
+            tif_files = [file for file in os.listdir(zip_dir) if file.endswith(".tif")]
+            if len(tif_files) == 0:
+                grd_file = [file for file in os.listdir(zip_dir) if file.endswith(".grd")][0]
+                tif_file = os.path.join(zip_dir, grd_file.replace(".grd", ".tif"))
+                subprocess.run(
+                    [
+                        "gdal_translate",
+                        "-a_srs",
+                        "EPSG:4326",
+                        os.path.join(zip_dir, grd_file),
+                        tif_file,
+                    ]
+                )
+            else:
+                tif_file = tif_files[0]
+        
+            shutil.copyfile(os.path.join(zip_dir, tif_file), out_file)
+            shutil.rmtree(zip_dir)
+            
+        elif ext == "geojson":
+            geojson_files = [file for file in os.listdir(zip_dir) if file.endswith(".geojson")]
+            if len(geojson_files) == 0:
+                json_file = [file for file in os.listdir(zip_dir) if file.endswith(".json")][0]
+                json_file = os.path.join(zip_dir, json_file)
+                with open(json_file) as data:
+                    features = json.load(data)["features"]
+                geojson = gpd.GeoDataFrame.from_features(features)
+                geojson = geojson.set_crs(self.crs)
+                geojson.to_file(out_file)
+            else:
+                geojson_file = geojson_files[0]
+                shutil.copyfile(os.path.join(zip_dir, geojson_file), out_file)
+            shutil.rmtree(zip_dir)
 
     
     def download_fathom(self):
@@ -552,7 +568,7 @@ class DatasetManager:
             full_data = None
             for index, dataset in enumerate(datasets):
                 logging.info(f"({index+1}/{len(datasets)}) Downloading {dataset}...")
-                local_file = self.download_url(dataset)
+                local_file = self.download_url(dataset, ext='tif')
                 dataset_name = dataset.replace(f"global_", "")
                 exposure_file = self._build_filename(
                     self.iso_code, f"{dataset_name}_exposure", self.local_dir, ext="tif"
