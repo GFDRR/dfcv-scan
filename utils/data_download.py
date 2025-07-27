@@ -28,6 +28,7 @@ class DatasetManager:
     def __init__(
         self,
         iso_code: str,
+        adm_source: str = 'geoboundary',
         acled_key: str = None,
         acled_email: str = None,
         acled_start_date: str = None,
@@ -44,6 +45,7 @@ class DatasetManager:
         datasets: list = None,
         data_dir: str = "data",
         config_file: str = None,
+        meter_crs: str = "EPSG:3857",
         crs: str = "EPSG:4326",
         asset: str = "worldpop",
         global_name: str = "global",
@@ -53,6 +55,7 @@ class DatasetManager:
         self.adm_level = adm_level
         self.data_dir = data_dir
         self.config_file = config_file
+        self.meter_crs = meter_crs
         self.crs = crs
         self.asset = asset
         self.overwrite = overwrite
@@ -83,10 +86,11 @@ class DatasetManager:
         os.makedirs(self.global_dir, exist_ok=True)
 
         self.asset_file = self._build_filename(iso_code, asset, self.local_dir, ext="tif")
-        self.merge_columns = []
 
         logging.info("Loading geoboundary...")
+        self.adm_source = adm_source
         self.geoboundary = self.download_geoboundary()
+        self.merge_columns = list(self.geoboundary.columns)
         
         logging.info("Loading hazard layers...")
         self.hazards = self.download_hazards()
@@ -104,9 +108,9 @@ class DatasetManager:
                 dataset = dataset.mask(dataset.isna(), 0)
                 data.append(dataset)
 
-        if self.acled_agg is not None:
+        if len(self.acled_agg) > 0:
             data.append(self.acled_agg)
-    
+
         data = data_utils._merge_data(data, columns=self.merge_columns)    
         data = self.calculate_multihazard_score(data)
     
@@ -149,35 +153,96 @@ class DatasetManager:
         return data
 
     
-    def download_geoboundary(self, source: str = 'gadm') -> gpd.GeoDataFrame:
+    def download_geoboundary(self) -> gpd.GeoDataFrame:
         out_file = self._build_filename(
             self.iso_code, self.adm_level, self.local_dir, ext="geojson"
         )
 
         if self.overwrite or not os.path.exists(out_file):
             logging.info(f"Downloading geoboundary for {self.iso_code}...")
-            self.download_url(source, dataset_name=self.adm_level, ext="geojson")
-            geoboundary = gpd.read_file(out_file)
-            
 
-            rename = dict()
-            for index in range(int(self.adm_level[-1])+1):
-                if index == 0:
-                    rename[f'GID_{index}'] = 'iso_code'
-                else:
-                    rename[f'GID_{index}'] = f'ADM{index}_ID'
-                    rename[f'NAME_{index}'] = f'ADM{index}'
-
-            geoboundary = geoboundary.rename(columns=rename)
-            all_columns = list(rename.values()) + ['geometry']
-            geoboundary = geoboundary[all_columns]
-            geoboundary.to_file(out_file)
-
-            self.merge_columns = all_columns
-            logging.info(f"Geoboundary file saved to {out_file}.")
-            geoboundary.to_file(out_file, engine="fiona")
+            if self.adm_source == 'gadm':
+                self.download_url(self.adm_source, dataset_name=self.adm_level, ext="geojson")
+                geoboundary = gpd.read_file(out_file)
+                
+                rename = dict()
+                for index in range(int(self.adm_level[-1])+1):
+                    if index == 0:
+                        rename[f'GID_{index}'] = 'iso_code'
+                    else:
+                        rename[f'GID_{index}'] = f'ADM{index}_ID'
+                        rename[f'NAME_{index}'] = f'ADM{index}'
     
+                geoboundary = geoboundary.rename(columns=rename)
+                all_columns = list(rename.values()) + ['geometry']
+                geoboundary = geoboundary[all_columns]
+                geoboundary.to_file(out_file)
+                
+            elif self.adm_source == "geoboundary":
+                gbhumanitarian_url = self.config["urls"]["gbhumanitarian_url"]
+                gbopen_url = self.config["urls"]["gbopen_url"]
+                level = int(self.adm_level[-1])
+
+                datasets = []
+                for index in range(1, level+1):
+                    adm_level = f"ADM{index}"
+                    intermediate_file = out_file = self._build_filename(
+                        self.iso_code, adm_level, self.local_dir, ext="geojson"
+                    )
+                    url = f"{gbhumanitarian_url}{self.iso_code}/{adm_level}/"
+                    try:
+                        r = requests.get(url)
+                        download_path = r.json()["gjDownloadURL"]
+                    except Exception:
+                        # Fallback to GBOpen URL if GBHumanitarian URL fails
+                        url = f"{gbopen_url}{self.iso_code}/{adm_level}/"
+                        r = requests.get(url)
+                        download_path = r.json()["gjDownloadURL"]
+            
+                    # Download and save the GeoJSON data
+                    geoboundary = requests.get(download_path).json()
+                    with open(intermediate_file, "w") as file:
+                        geojson.dump(geoboundary, file)
+            
+                    # Read the downloaded GeoJSON into a GeoDataFrame
+                    geoboundary = gpd.read_file(intermediate_file)
+                    geoboundary["iso_code"] = self.iso_code
+            
+                    # Select relevant columns and rename them
+                    geoboundary = geoboundary[["iso_code", "shapeName", "shapeID", "geometry"]]
+                    geoboundary.columns = ["iso_code", adm_level, f"{adm_level}_ID", "geometry"]
+                    
+                    datasets.append(geoboundary)
+                    geoboundary.to_file(intermediate_file)
+                    logging.info(f"Geoboundary file saved to {intermediate_file}.")
+
+                geoboundary = datasets[-1].to_crs(self.meter_crs)
+                columns = geoboundary.columns
+
+                # Iterate through the remaining DataFrames and perform joins
+                for index in reversed(range(level-1)):
+                    current = datasets[index].to_crs(self.meter_crs)
+                    join_columns = [f"ADM{index+1}_ID", f"ADM{index+1}", 'geometry']
+                    joined = geoboundary.sjoin(current[join_columns], predicate="intersects").drop(columns=["index_right"])
+                    joined = joined.to_crs(self.meter_crs)
+                                        
+                    # Calculate the intersection area and percentage overlap
+                    adm = join_columns[0]
+                    joined['intersection_area'] = joined.apply(
+                        lambda row: row.geometry.intersection(current[current[adm] == row[adm]].iloc[0].geometry).area, axis=1
+                    )
+                    joined['overlap_percentage'] = joined['intersection_area'] / joined['geometry'].area * 100 
+                    
+                    # Filter for the desired overlap percentage
+                    geoboundary = joined[joined['overlap_percentage'] >= 50]
+                    columns = list(columns) + list(join_columns[:-1])
+                    geoboundary = geoboundary[columns]
+                
+            geoboundary.to_crs(self.crs).to_file(out_file)
+            logging.info(f"Geoboundary file saved to {out_file}.")
+
         geoboundary = gpd.read_file(out_file).to_crs(self.crs)
+        self.merge_columns = list(geoboundary.columns)
         return geoboundary
 
     
@@ -320,7 +385,7 @@ class DatasetManager:
                 return 5000
             return 0
     
-        filename = os.path.basename(acled_file).split(".")[0] + f"_{temp_name}.geojson"
+        filename = os.path.basename(acled_file).split(".")[0] + f"_{temp_name.upper()}.geojson"
         temp_file = os.path.join(self.local_dir, filename)
     
         if not os.path.exists(temp_file):
@@ -484,7 +549,7 @@ class DatasetManager:
         fathom_dir = os.path.join(self.local_dir, fathom_folder)
     
         full_data_file = self._build_filename(
-            self.iso_code, self.fathom_name, self.global_dir, ext="geojson"
+            self.iso_code, self.fathom_name, self.local_dir, ext="geojson"
         )
         os.path.join(self.local_dir, f"{self.iso_code}_{self.fathom_name}_{self.adm_level}.geojson")
 
