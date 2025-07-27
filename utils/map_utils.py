@@ -1,26 +1,286 @@
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+import matplotlib.ticker as mticker
+import matplotlib.patches as mpatches
+
+import copy
 import contextily as ctx
 import geopandas as gpd
+import pandas as pd
+import numpy as np
 import pyproj
 import pycountry
 import folium
 import geojson_rewind
 import json
 
+import seaborn as sns
 import pypalettes
 import pyfonts
+
+
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from matplotlib.colors import ListedColormap
+from utils import data_utils
+
+
+regular = pyfonts.load_google_font("Roboto")
+bold = pyfonts.load_google_font("Roboto", weight="bold")
+
+
+def plot_geoboundaries(
+    data: gpd.GeoDataFrame, 
+    adm_level: str, 
+    config: dict,
+    grouping: dict = None, 
+    title: str = None,
+    subtitle: str = None, 
+    legend_title: str = None,
+    annotation: str = None,
+    group: str = 'group'
+):
+    
+    fig, ax = plt.subplots(figsize=(config['figsize_x'], config['figsize_y']),  dpi=config['dpi'])
+    data_adm = data.dissolve(adm_level).reset_index()
+
+    if (grouping is not None) or (group in data.columns):
+        cmap = ListedColormap(config["cmap"])
+        edgecolor = config["edgecolor_with_group"]
+        linewidth = config["linewidth_with_group"]
+        
+        if group not in data.columns:
+            data[group] = data[adm_level].map(grouping)
+            
+        data.dissolve(group).reset_index().plot(
+            group, 
+            ax=ax, 
+            cmap=cmap, 
+            legend=True, 
+            categorical=True,
+            linewidth=config["group_linewidth"], 
+            edgecolor=config["group_edgecolor"], 
+            legend_kwds={
+                'loc': config['group_legend_loc'], 
+                'fontsize': config['group_legend_fontsize'],
+                'title_fontsize': config['group_legend_title_fontsize']
+            }
+        )
+        legend = ax.get_legend()
+        if 'group_bbox_to_anchor' in config:
+            legend.set_bbox_to_anchor(config['group_bbox_to_anchor'])
+        legend.set_title(legend_title)
+        legend._legend_box.align = config['group_legend_box_align']
+    else:
+        linewidth = config["linewidth_no_group"]
+        edgecolor = config["edgecolor_no_group"]
+    
+    data_adm.plot(ax=ax, facecolor="none", edgecolor=edgecolor, lw=linewidth)
+    data_adm.apply(lambda x: ax.annotate(
+        text=x[adm_level].replace("(", "\n("), 
+        xy=x.geometry.centroid.coords[0], ha='center', 
+        fontsize=config["fontsize"],
+        bbox=dict(
+            facecolor=config["label_facecolor"], 
+            edgecolor=config["label_edgecolor"], 
+            lw=config["label_linewidth"], 
+            alpha=config["label_alpha"], 
+            boxstyle=config["label_boxstyle"]
+        )
+    ), axis=1);
+    dissolved = data.dissolve("iso_code")
+    dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
+    dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
+    
+    _add_titles_and_annotations(fig, config, title, subtitle, annotation)
+    ax.axis("off")
+
+
+def plot_choropleth(
+    data: gpd.GeoDataFrame,
+    config: dict,
+    var: str, 
+    var_title: str = None, 
+    title: str = None,
+    subtitle: str = None, 
+    legend_title: str = None,
+    annotation: str = None,
+    vmin: float = None,
+    vmax: float = None,
+    legend: bool = False
+):    
+    data = data.to_crs(config['crs'])
+    iso_code = data.iso_code.values[0]
+    fig, ax = plt.subplots(figsize=(config['figsize_x'], config['figsize_y']),  dpi=config['dpi'])
+
+    if config['create_cmap']:
+        cmap = pypalettes.create_cmap(colors=config['colormap'], cmap_type=config['cmap_type'])
+    else:
+        cmap = pypalettes.load_cmap(config['palette_name'], cmap_type=config['cmap_type'])
+
+    legend_kwds = dict()
+    if config['legend_type'] == 'colorbar':
+        legend = True
+        legend_kwds = {
+            'shrink': config['legend_shrink'], 
+            'location': config['legend_location']
+        }
+        
+    mpl.rcParams['hatch.linewidth'] = 0.1
+    missing_kwds={
+        "color": config['missing_color'],
+        "edgecolor": config['missing_edgecolor'],
+        "linewidth": config['missing_linewidth'],
+        "hatch": config['missing_hatch'],
+        "label": config['missing_label']
+    }
+
+    if 'conflict' in var:
+        data.loc[data[var] == 0, var] = None
+
+    if 'relative' in var:
+        data[var] = data[var] * 100
+    if vmin is None and vmax is None:
+        vmin = data[var].min()
+        vmax = data[var].max()
+        
+    data.plot(
+        var, 
+        ax=ax, 
+        legend=legend, 
+        cmap=cmap, 
+        edgecolor=config['edgecolor'], 
+        scheme=None,
+        lw=config['linewidth'], 
+        legend_kwds=legend_kwds, 
+        missing_kwds=missing_kwds,
+        vmin=vmin,
+        vmax=vmax
+    )   
+
+    if config['legend_type'] == 'colorbar':
+        cbar = fig.axes[1]
+        cbar.tick_params(labelsize=config['legend_label_fontsize'])
+        cbar.set_title(
+            legend_title, 
+            fontsize=config['legend_title_fontsize'], 
+            loc=config['legend_title_loc'], 
+            x=config['legend_title_x'], 
+            y=config['legend_title_y']
+        )
+        def custom_format(value, tick_number):
+            if value > 1:
+                return f"{value:,.0f}"
+            else:
+                return f"{value:,.2f}"
+        cbar.yaxis.set_major_formatter(mticker.FuncFormatter(custom_format))
+
+    elif config['legend_type'] == 'barplot':
+        iax = ax.inset_axes(bounds=config["barplot_bounds"])   
+        iax.set_xticks([])
+        iax.spines[["top", "right", "bottom"]].set_visible(False)
+
+        nbins = config["barplot_nbins"]
+        bins = np.linspace(vmin, vmax, nbins + 1)
+        bin_width = bins[1] - bins[0]
+        y_ticks = bins[:-1] + bin_width / 2
+
+        colors = [cmap((val - min(bins)) / (max(bins) - min(bins))) for val in bins]
+        n = iax.hist(data[var], bins=bins, orientation='horizontal', alpha=0)[0]
+        iax.barh(y_ticks, n, height=bin_width, color=colors)
+        
+        iax.set_yticks(
+            y_ticks, 
+            labels=[
+                f"{data_utils._humanize(edge)} to {data_utils._humanize(edge+bin_width)}" 
+                for edge in bins[:-1]
+            ], 
+            size=config["barplot_tick_size"]
+        ) 
+
+        # Get the current y-axis tick label positions
+        iax.figure.canvas.draw()
+
+        # Get the bounding box of y-axis tick labels in display coords
+        tick_label_boxes = [
+            label.get_window_extent() 
+            for label in iax.get_yticklabels() 
+            if label.get_text()
+        ]
+        
+        if tick_label_boxes:
+            # Leftmost edge of all tick labels (min x value)
+            leftmost = min(box.x0 for box in tick_label_boxes)
+        
+            # Convert display coords to axis coords
+            inv = iax.transAxes.inverted()
+            leftmost_axes = inv.transform((leftmost, 0))[0]
+        
+            # Place title aligned to leftmost tick label
+            iax.text(
+                leftmost_axes,
+                config['legend_title_gap'], 
+                legend_title,
+                transform=iax.transAxes,
+                fontsize=config['legend_title_fontsize'],
+                va='bottom',
+                ha='left'
+            )
+
+        for index, (x, y) in enumerate(zip(y_ticks, n)):
+            percent = (y/sum(n))
+            label = r"$\bf{" + str(
+                data_utils._humanize(y)
+            ) + "}$" + f" ({percent * 100:.0f}%)"
+            y_range = max(n) - min(n)
+            y += 0.035 * y_range
+            iax.text(
+                y, x, 
+                s=label, 
+                color=config["barplot_label_color"], 
+                size=config["barplot_label_size"],
+                va="center"
+            )
+            
+        iax.tick_params(axis="y", length=2)
+        
+    if data[var].isnull().any():
+        missing_patch = mpatches.Patch(
+            facecolor=config['missing_color'], 
+            edgecolor=config['missing_edgecolor'], 
+            hatch=config['missing_hatch'],
+            label=config['missing_label'],
+            linewidth=config['linewidth'] 
+        )
+        ax.legend(
+            handles=[missing_patch], 
+            fancybox=False, 
+            frameon=False, 
+            fontsize=config["missing_legend_fontsize"],
+            loc=config["missing_legend_loc"],  
+            bbox_transform=fig.transFigure
+        )
+
+    dissolved = data.dissolve("iso_code")
+    dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
+    dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
+    country = pycountry.countries.get(alpha_3=iso_code).name
+
+    title = config['title'].format(var_title, country)
+    _add_titles_and_annotations(fig, config, title, subtitle, annotation)
+    ax.axis("off")
+
 
 def plot_folium(
     data: gpd.GeoDataFrame,
     acled: gpd.GeoDataFrame,
     var: str, 
     var_title: str, 
-    adm_level: str = "ADM3",
-    tiles: str = 'cartodbpositron',
-    zoom_start: int = 8,
-    fill_opacity: float = 0.8,
-    fill_color: str = "YlGn",
-    line_color: str = "gray",
+    adm_level: str,
+    tiles: str,
+    zoom_start: int,
+    fill_opacity: float,
+    fill_color: str,
+    line_color: str,
     acled_group_name: str = None,
     meter_crs: str = "EPSG:3857"
 ):
@@ -71,92 +331,67 @@ def plot_folium(
     m.add_child(nil)
     m.keep_in_front(nil)
 
-    points_group = folium.FeatureGroup(name=acled_group_name)
-    fill_colors = ["#a8225e", "#bc5090", "#ff6361", "#ffa600"]
-    points_var = "disorder_type"
 
-    categories = acled[points_var].unique()
-    acled["fill_color"] = None
-    for fill_color, category in zip(fill_colors[:len(categories)], categories):
-        acled.loc[acled[points_var] == category, "fill_color"] = fill_color
+    if acled is not None:
+        points_group = folium.FeatureGroup(name=acled_group_name)
+        fill_colors = ["#a8225e", "#bc5090", "#ff6361", "#ffa600"]
+        points_var = "disorder_type"
     
-    for index, row in acled.iterrows():
-        popup = """
-        <b>Disorder type:</b> %s<br>
-        <b>Event type:</b> %s<br>
-        <b>Subevent type:</b> %s<br>
-        """ % (
-            row['disorder_type'],
-            row['event_type'],
-            row['sub_event_type']
-        )
-        folium.CircleMarker(
-            location=[row.geometry.y, row.geometry.x], 
-            stroke=False,
-            fill=True, 
-            fill_color=row['fill_color'],
-            radius=4,
-            tooltip=popup
-        ).add_to(points_group)
-    
-    
-        points_group.add_to(m)
-        m.keep_in_front(points_group)
+        categories = acled[points_var].unique()
+        acled["fill_color"] = None
+        for fill_color, category in zip(fill_colors[:len(categories)], categories):
+            acled.loc[acled[points_var] == category, "fill_color"] = fill_color
+        
+        for index, row in acled.iterrows():
+            popup = """
+            <b>Disorder type:</b> %s<br>
+            <b>Event type:</b> %s<br>
+            <b>Subevent type:</b> %s<br>
+            """ % (
+                row['disorder_type'],
+                row['event_type'],
+                row['sub_event_type']
+            )
+            folium.CircleMarker(
+                location=[row.geometry.y, row.geometry.x], 
+                stroke=False,
+                fill=True, 
+                fill_color=row['fill_color'],
+                radius=4,
+                tooltip=popup
+            ).add_to(points_group)
+        
+        
+            points_group.add_to(m)
+            m.keep_in_front(points_group)
+            
     folium.LayerControl().add_to(m)
     return m
 
 
-def plot_choropleth(
-    data: gpd.GeoDataFrame,
-    var: str, 
-    var_title: str, 
-    figsize_x: int,
-    figsize_y: int,
-    dpi: int,
-    crs: str,
-    title: str,   
-    title_x: float,
-    title_y: float,
-    title_fontsize: int, 
-    subtitle_x: float,
-    subtitle_y: float,
-    subtitle_fontsize: int, 
-    edgecolor: str,
-    lw: float,
-    font_type: str,
-    legend: bool,
-    vmin: float = 0,
-    vmax: float = 1,
-    create_cmap: bool = False,
-    cmap_type: str = "continuous",
-    palette_name: str = "YlGnBu",
-    colormap: list = [],
-    subtitle: str = None, 
-    annotation: str = None,
-):
-    regular = pyfonts.load_google_font(font_type)
-    bold = pyfonts.load_google_font(font_type, weight="bold")
-    
-    data = data.to_crs(crs)
-    iso_code = data.iso_code.values[0]
-    fig, ax = plt.subplots(figsize=(figsize_x, figsize_y),  dpi=dpi)
-
-    if create_cmap:
-        cmap = pypalettes.create_cmap(colors=colormap, cmap_type=cmap_type)
-    else:
-        cmap = pypalettes.load_cmap(palette_name, cmap_type=cmap_type)
-        
-    data.plot(var, ax=ax, legend=legend, cmap=cmap, edgecolor=edgecolor, lw=lw, vmin=vmin, vmax=vmax);
-    data.dissolve("iso_code").plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
-    country = pycountry.countries.get(alpha_3=iso_code).name
-
-    if title is not None:
-        title = title.format(var_title, country)
-        fig.text(x=title_x, y=title_y, s=title, size=title_fontsize, font=bold)
+def _add_titles_and_annotations(fig, config, title, subtitle, annotation):
+    fig.text(
+        x=config['title_x'], 
+        y=config['title_y'], 
+        s=title, 
+        size=config['title_fontsize'], 
+        font=bold
+    )
     if subtitle is not None:
-        fig.text(x=subtitle_x, y=subtitle_y, s=subtitle, size=subtitle_fontsize, font=regular)
+        fig.text(
+            x=config['subtitle_x'], 
+            y=config['subtitle_y'], 
+            s=subtitle, 
+            size=config['subtitle_fontsize'], 
+            font=regular
+        )
     if annotation is not None:
-        fig.text(x=0.15, y=0.13, s=annotation, size=6, color="#909090", font=regular)
+        fig.text(
+            x=config['annotation_x'], 
+            y=config['annotation_y'], 
+            s=annotation, 
+            size=config['annotation_fontsize'], 
+            color=config['annotation_color'], 
+            font=regular
+        )
 
-    ax.axis("off")
-    
