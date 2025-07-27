@@ -9,8 +9,28 @@ import geopandas as gpd
 import rasterio as rio
 import rasterio.mask
 import subprocess
+import humanize
+
+from shapely.geometry import Polygon, MultiPolygon
 
 logging.basicConfig(level=logging.INFO)
+
+
+def _humanize(value):
+    output = humanize.intword(str(int(value)), '%0.0f').replace(
+        " thousand", "K"
+    )
+    return output
+
+
+def _fill_holes(geometry):
+    if isinstance(geometry, Polygon):
+        # Create a new Polygon from its exterior ring, effectively removing holes
+        return Polygon(geometry.exterior)
+    elif isinstance(geometry, MultiPolygon):
+        # Apply to each polygon within the MultiPolygon
+        return MultiPolygon([Polygon(p.exterior) for p in geometry.geoms])
+    return geometry # Return other geometry types as is    
 
 
 def _merge_data(
