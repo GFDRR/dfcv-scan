@@ -38,6 +38,8 @@ nodata:
 urls: 
     acled_url: "https://api.acleddata.com/acled/read"
     gadm_url: "https://geodata.ucdavis.edu/gadm/gadm4.1/json/gadm41_{}_{}.json.zip"
+    gbhumanitarian_url: "https://www.geoboundaries.org/api/current/gbHumanitarian/"
+    gbopen_url: "https://www.geoboundaries.org/api/current/gbOpen/"
     worldpop_url: "https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/{}/{}_ppp_2020_UNadj.tif"
     global_landslide_url: "https://datacatalogfiles.worldbank.org/ddh-published/0037584/DR0045417/LS_TH_COG.tif"
     global_earthquake_url: "https://cloud.openquake.org/s/6SnFk2f92JEr76H/download/GEM-GSHM_PGA-475y-rock_v2023.zip" 
