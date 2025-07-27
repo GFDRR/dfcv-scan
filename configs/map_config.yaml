@@ -1,25 +1,100 @@
+geoboundaries:
+    figsize_x: 10
+    figsize_y: 10
+    dpi: 300
+
+    title_x: 0.15
+    title_y: 0.89
+    title_fontsize: 15
+    
+    subtitle_x: 0.15
+    subtitle_y: 0.87
+    subtitle_fontsize: 10
+
+    annotation_x: 0.15
+    annotation_y: 0.125
+    annotation_fontsize: 6
+    annotation_color: "#909090"
+
+    edgecolor_with_group: "white"
+    edgecolor_no_group: "dimgray"
+    linewidth_with_group: 0.2
+    linewidth_no_group: 0.4
+
+    fontsize: 5
+    label_facecolor: 'white'
+    label_edgecolor: 'dimgray'
+    label_linewidth: 0.3
+    label_alpha: 0.7
+    label_boxstyle: 'round,pad=0.5'
+
+    group_linewidth: 0.2
+    group_edgecolor: "white"
+    group_legend_loc: 'best'
+    group_legend_title_fontsize: 'small'
+    group_legend_fontsize: 'x-small'
+    group_legend_box_align: 'left'
+    group_bbox_to_anchor: [-0.3, 0.7, 0.2, 0.2]
+
+    cmap: ['#005f73', '#0a9396', '#e9d8a6', "#ee9b00", "#ca6702", '#ae2012']
+
+        
 choropleth:
     figsize_x: 10
     figsize_y: 10
     dpi: 300
     crs: "EPSG:3857"
-    legend: False
+
+    linewidth: 0.4
     edgecolor: "lightgrey"
-    lw: 0.4
     font_type: "Roboto"
+
     title: "{} in {}"
     title_x: 0.15
     title_y: 0.89
     title_fontsize: 15
+    
     subtitle_x: 0.15
-    subtitle_y: 0.875
+    subtitle_y: 0.87
     subtitle_fontsize: 10
+
+    annotation_x: 0.15
+    annotation_y: 0.125
+    annotation_fontsize: 6
+    annotation_color: "#909090"
+    
+    legend: False
+    legend_title: 
+    legend_type: 'barplot'
+    legend_label_fontsize: 7
+    legend_shrink: 0.25
+    legend_location: 'left'
+    legend_title_fontsize: 7
+    legend_title_loc: "left"
+    legend_title_x: -5
+    legend_title_y: 1.025
+    legend_title_gap: 1.025
+
+    barplot_nbins: 10
+    barplot_bounds: [-0.25, 0.65, 0.25, 0.25]
+    barplot_tick_size: 6
+    barplot_label_color: "dimgray"
+    barplot_label_size: 5
+    
+    missing_color: "lightgrey"
+    missing_edgecolor: "dimgray"
+    missing_linewidth: 0.1
+    missing_hatch: "////////"
+    missing_label: "No data"
+    missing_legend_fontsize: "small"
+    missing_legend_loc: "lower right"
+    
     palette_name: "YlGnBu"
     create_cmap: False
     cmap_type: "continuous"
 
+
 folium:
-    adm_level: "ADM3"
     tiles: 'cartodbpositron'
     zoom_start: 8
     fill_opacity: 0.9
@@ -27,3 +102,4 @@ folium:
     line_color: "lightgrey"
     meter_crs: "EPSG:3857"
     acled_group_name: 'ACLED Conflict Events'
+    
