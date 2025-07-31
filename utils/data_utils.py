@@ -17,10 +17,20 @@ logging.basicConfig(level=logging.INFO)
 
 
 def _humanize(value):
-    output = humanize.intword(str(int(value)), '%0.0f').replace(
-        " thousand", "K"
-    )
-    return output
+    if value >= 10:
+        return humanize.intword(value, "%0.1f").replace(
+            " thousand", "K"
+        ).replace(
+            " million", "M"
+        )
+    elif value >= 0:
+        if value.is_integer():
+            return '{:0.0f}'.format(value)
+        elif value < 1:
+            return '{:0.2f}'.format(value)
+        else:
+            return '{:0.1f}'.format(value)
+    return 0
 
 
 def _fill_holes(geometry):
@@ -93,9 +103,6 @@ def _clip_raster(
 
 
 def read_config(config_file: str):
-    if config_file is None:
-        config_file = "configs/config.yaml"
-
     with open(config_file, "r") as file:
         config = yaml.safe_load(file)
     return config
