@@ -1,3 +1,40 @@
+raster:
+    figsize_x: 10
+    figsize_y: 10
+    dpi: 300
+
+    title_x: 0.15
+    title_y: 0.89
+    title_fontsize: 13
+    
+    subtitle_x: 0.15
+    subtitle_y: 0.87
+    subtitle_fontsize: 10
+
+    legend_title_x: 1.0
+    legend_title_y: 1.025
+    legend_title_loc: "center"
+    legend_title_fontsize: 7
+    legend_label_fontsize: 7
+
+    annotation_x: 0.15
+    annotation_y: 0.125
+    annotation_fontsize: 6
+    annotation_color: "#909090"
+    
+    title: "{} in {}"
+    cmap: "YlGnBu"
+
+    cbar_width: "4%"
+    cbar_height: "25%"
+    cbar_loc: 'center left'
+    cbar_bbox_x: -0.35
+    cbar_bbox_y: 0
+    cbar_bbox_width: 1
+    cbar_bbox_height: 1
+    cbar_pad: 0.04
+    cbar_fontsize: 7
+
 geoboundaries:
     figsize_x: 10
     figsize_y: 10
@@ -34,18 +71,73 @@ geoboundaries:
     group_legend_title_fontsize: 'small'
     group_legend_fontsize: 'x-small'
     group_legend_box_align: 'left'
-    group_bbox_to_anchor: [-0.3, 0.7, 0.2, 0.2]
+    group_legend_x: -0.3
+    group_legend_y: 0.7
+    group_legend_width: 0.2
+    group_legend_height: 0.2
 
     cmap: ['#005f73', '#0a9396', '#e9d8a6', "#ee9b00", "#ca6702", '#ae2012']
 
         
+bivariate_choropleth:
+    figsize_x: 10
+    figsize_y: 10
+    dpi: 300
+    crs: "EPSG:3857"
+
+    title: "{} and {} in {}"
+    title_x: 0.15
+    title_y: 0.89
+    title_fontsize: 15
+    
+    subtitle_x: 0.15
+    subtitle_y: 0.87
+    subtitle_fontsize: 10
+
+    annotation_x: 0.15
+    annotation_y: 0.125
+    annotation_fontsize: 6
+    annotation_color: "#909090"
+
+    linewidth: 0.15
+    edgecolor: "white"
+    font_type: "Roboto"
+
+    missing_color: "gainsboro"
+    missing_edgecolor: "dimgray"
+    missing_linewidth: 0.15
+    missing_hatch: "////////"
+    missing_label: "No data"
+    missing_legend_fontsize: "small"
+    missing_legend_loc: "lower right"
+
+    cmap4: [
+        '#d3d3d3', '#b0c1c7', '#8bafbb', '#689cad', 
+        '#c6aaaa', '#a49ba0', '#818d97', '#5d7e8b', 
+        '#b87f7f', '#977479', '#76686f', '#555d69',
+        '#ad5253', '#8d4b4d', '#6d4447', '#4c3d43'
+    ]
+
+    cmap5: [
+        "#afafaf", "#a1abaf", "#92a7af", "#84a4b0", "#75a0b1", "#a79595", "#9a9296", "#8c8f96", "#7e8c96", "#708897", "#9f7a7b", "#92787c", "#85757c", "#78737c", "#6a707d", "#976061", "#8b5e61", "#7f5c61", "#725a62", "#655862", "#8f4445", "#844345", "#784145", "#6c4045", "#603e46"
+    ]
+
+    cmap5_aqua: [
+        "#d3d3d3", "#b1d1d1", "#88cfcf", "#56cbcb", "#00c5c5", 
+        "#ceabc7", "#acaac6", "#85a7c3", "#53a4c0", "#00a0ba", 
+        "#c881bb", "#a780b9", "#817eb6", "#517cb3", "#0079ae", 
+        "#c252ac", "#a251aa", "#7d50a8", "#4f4fa5", "#004da1", 
+        "#b70092", "#990091", "#76008f", "#4a008d", "#000089"
+    ]
+
+
 choropleth:
     figsize_x: 10
     figsize_y: 10
     dpi: 300
     crs: "EPSG:3857"
 
-    linewidth: 0.4
+    linewidth: 0.3
     edgecolor: "lightgrey"
     font_type: "Roboto"
 
@@ -64,24 +156,27 @@ choropleth:
     annotation_color: "#909090"
     
     legend: False
-    legend_title: 
+    legend_title_x: -5
+    legend_title_y: 1.025
     legend_type: 'barplot'
+    
     legend_label_fontsize: 7
     legend_shrink: 0.25
     legend_location: 'left'
     legend_title_fontsize: 7
     legend_title_loc: "left"
-    legend_title_x: -5
-    legend_title_y: 1.025
     legend_title_gap: 1.025
 
     barplot_nbins: 10
-    barplot_bounds: [-0.25, 0.65, 0.25, 0.25]
+    barplot_x: -0.25
+    barplot_y: 0.25
+    barplot_width: 0.2
+    barplot_height: 0.2
     barplot_tick_size: 6
     barplot_label_color: "dimgray"
     barplot_label_size: 5
     
-    missing_color: "lightgrey"
+    missing_color: "gainsboro"
     missing_edgecolor: "dimgray"
     missing_linewidth: 0.1
     missing_hatch: "////////"
@@ -93,13 +188,43 @@ choropleth:
     create_cmap: False
     cmap_type: "continuous"
 
+    fontsize: 5
+    label_facecolor: 'white'
+    label_edgecolor: 'dimgray'
+    label_linewidth: 0.3
+    label_alpha: 0.7
+    label_boxstyle: 'round,pad=0.5'
+
 
 folium:
     tiles: 'cartodbpositron'
-    zoom_start: 8
+    zoom_start: 7
     fill_opacity: 0.9
     fill_color: "YlGnBu"
     line_color: "lightgrey"
     meter_crs: "EPSG:3857"
     acled_group_name: 'ACLED Conflict Events'
+
+
+legend_titles:
+    worldpop: "Population per unit"
+    mhs_dfcv_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
+    mhs_exposure_relative: "Multi-hazard Exposure Index"
+    exposure_relative: "Proportion of the population \nexposed to {} per unit (%)"
+    exposure: "Population exposed to \n{} per unit"
+    earthquake: "Peak Ground \nAcceleration (PGA)"
+    cyclone: "Windspeed"
+
+var_titles:
+    worldpop: "Population"
+    mhs_dfcv_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
+    exposure_relative: "Relative {} Exposure"
+    exposure: "Absolute {} Exposure"
+    
+annotations:
+    mhs: "Multi-hazard Score, The World Bank Group, 2025"
+    earthquake: "Global Earthquake Model (GEM) Seismic Hazard Map (version 2023.1 - June 2023)"
+    worldpop: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
+    exposure: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
+    conflict: "Conflict Data from Armed Conflict Location & Event Data Project (ACLED)"
     
