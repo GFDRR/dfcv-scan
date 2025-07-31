@@ -44,17 +44,19 @@ class DatasetManager:
         adm_level: str = "ADM3",
         datasets: list = None,
         data_dir: str = "data",
-        config_file: str = None,
         meter_crs: str = "EPSG:3857",
         crs: str = "EPSG:4326",
         asset: str = "worldpop",
         global_name: str = "global",
         overwrite: bool = False,
+        config_file: str = "configs/config.yaml",
+        acled_file: str = "configs/acled_creds.yaml"
     ):
         self.iso_code = iso_code
         self.adm_level = adm_level
         self.data_dir = data_dir
         self.config_file = config_file
+        self.acled_file = acled_file
         self.meter_crs = meter_crs
         self.crs = crs
         self.asset = asset
@@ -72,6 +74,11 @@ class DatasetManager:
         self.fathom_rp = fathom_rp
         self.fathom_threshold = fathom_threshold
         self.config = data_utils.read_config(config_file)
+
+        if os.path.exists(acled_file):
+            self.acled_creds = data_utils.read_config(acled_file)
+            self.acled_key = self.acled_creds["acled_key"]
+            self.acled_email = self.acled_creds["acled_email"]
         
         self.global_name = global_name.upper()
         self.fathom_name = fathom_name.upper()
@@ -99,6 +106,7 @@ class DatasetManager:
         logging.info("Loading conflict data...")
         self.acled = self.download_acled()
         self.acled_agg = self.download_acled(aggregate=True)
+        self.data = self.combine_datasets()
 
 
     def combine_datasets(self) -> gpd.GeoDataFrame:
@@ -352,18 +360,22 @@ class DatasetManager:
         if not os.path.exists(agg_file):
             self._aggregate_acled_exposure(acled, agg_file)
         agg = gpd.read_file(agg_file)
-    
+
+        column = "conflict_exposure"
+        prefix = "dfcv"
         if not os.path.exists(exposure_vector):
             acled_tif = self._calculate_custom_acled_exposure(acled_file)
             out_tif = self._calculate_exposure(acled_tif, exposure_raster, threshold=1)
             data = self._calculate_zonal_stats(
                 out_tif,
-                column="conflict_exposure",
-                prefix="dfcv",
+                column=column,
+                prefix=prefix,
                 stats_agg=["sum"],
                 out_file=exposure_vector
             )
+        exposure_var = prefix + "_" + column
         exposure = gpd.read_file(exposure_vector)
+        exposure.loc[exposure[exposure_var] == 0, exposure_var] = None
         acled = data_utils._merge_data([agg, exposure], columns=self.merge_columns)
     
         return acled
@@ -449,9 +461,11 @@ class DatasetManager:
             columns=[f"{self.adm_level}_ID"],
             how="left",
         )
-        agg["acled_conflict_exposure"] = agg["population_best"] / (
+        exposure_var = "acled_conflict_exposure"
+        agg[exposure_var] = agg["population_best"] / (
             agg["conflict_count"] - agg["null_conflict_count"].fillna(0)
         )
+        agg.loc[agg[exposure_var] == 0, exposure_var] = None
         agg.to_file(agg_file)
         return agg
 
