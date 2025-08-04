@@ -16,12 +16,17 @@ from shapely.geometry import Polygon, MultiPolygon
 logging.basicConfig(level=logging.INFO)
 
 
-def _humanize(value):
+def _humanize(value, number=None):
     if value >= 10:
-        return humanize.intword(value, "%0.1f").replace(
+        formatter = "%0.1f"
+        if value.is_integer() or str(value)[:-2] == ".0":
+            formatter = "%0.0f"
+        return humanize.intword(value, formatter).replace(
             " thousand", "K"
         ).replace(
             " million", "M"
+        ).replace(
+            ".0", ""
         )
     elif value >= 0:
         if value.is_integer():
