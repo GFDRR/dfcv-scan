@@ -35,60 +35,105 @@ bold = pyfonts.load_google_font("Roboto", weight="bold")
 class GeoPlot:
     def __init__(
         self, 
-        map_config_file: str = "configs/map_config.yaml",
-        adm_config_file: str = 'configs/adm_config.yaml'
+        data: gpd.GeoDataFrame,
+        map_config_file: str = "configs/map_config.yaml"
     ):
-        self.map_config = data_utils.read_config(map_config_file)
-        self.adm_config = data_utils.read_config(adm_config_file)
-        
-
-    def update_map_config(self, key: str, config: dict):
-        self.map_config[key].update(config)
-        
-
-    def _get_title(self, var: str, config_key:str):
-        legend_titles = self.map_config[config_key]
-        for key, title in legend_titles.items():
-            if key == var:
-                return title
-            elif key in var:
-                if "conflict" in var:
-                    return title.format("conflict")
-                elif "mhs" in var:
-                    return title.format("multi-hazard")
-                else:
-                    hazard = var.replace("_" + key, "").replace("_", " ")
-                    return title.format(hazard)
-                    
-        return var.replace("_", " ").title() + " Risk"
+        self.data = data  
+        self.map_config_file = map_config_file
+        self.refresh_config()
 
     
-    def _get_annotation(self, var_list: list = []):
-        annotations = self.map_config["annotations"]
-        annotation = "Source: \n"
+    def refresh_config(self):
+        self.map_config = data_utils.read_config(self.map_config_file)
+        return self.map_config
+        
 
-        anns = []
-        for var in var_list:
-            for key, ann in annotations.items():
-                if key in var:
-                    if ann not in anns:
-                        anns.append(ann)
-                        annotation += ann + "\n"
-        return annotation
+    def update_config(self, key: str, config: dict):
+        self.map_config[key].update(config)
+
+
+    def plot_folium(
+        self,
+        var: str, 
+        var_title: str = None, 
+        adm_level: str = "ADM3",
+        config: dict = None,
+        precision: int = 4
+    ):
+        data = self.data.copy()
+        config_key = "folium"
+        self.refresh_config()
+        if config is not None:
+            self.update_config(key=config_key, config=config)
+            
+        config = self.map_config[config_key]
+
+        if var_title is None:
+            var_title = self._get_title(var, "var_titles").title()
+    
+        original_crs = data.crs
+        centroid = data.dissolve("iso_code").to_crs(config["meter_crs"]).centroid
+        transformer = pyproj.Transformer.from_crs(
+            pyproj.CRS(config["meter_crs"]), pyproj.CRS(original_crs), always_xy=True
+        )
+        x, y = transformer.transform(centroid.x.iloc[0], centroid.y.iloc[0])
+
+        m = folium.Map(location=[y, x], tiles=config["tiles"], zoom_start=config["zoom_start"])
+        key_on = f"feature.properties.{adm_level}_ID"
+        folium.Choropleth(
+            data=data,
+            geo_data=data.to_json(),
+            columns=[f"{adm_level}_ID", var],
+            key_on=key_on,
+            fill_opacity=config["fill_opacity"],
+            fill_color=config["fill_color"],
+            line_color=config["line_color"],
+            name=var_title,
+            legend_name=var_title
+        ).add_to(m)
+        
+        style_function = lambda x: config["style_function"]
+        highlight_function = lambda x: config["highlight_function"]
+
+        var_trans = var+"_transformed"
+        data[var_trans] = data[var].apply(lambda x: round(x, precision))   
+        
+        nil = folium.features.GeoJson(
+            data,
+            style_function=style_function, 
+            highlight_function=highlight_function, 
+            tooltip=folium.features.GeoJsonTooltip(
+                fields=[adm_level, var_trans], 
+                aliases=[f'{adm_level}: ', f'{var_title}: ']
+            ),
+            control=False
+        )
+        m.add_child(nil)
+        m.keep_in_front(nil)
+                
+        folium.LayerControl().add_to(m)
+        return m
+    
 
     
     def plot_raster(
         self,
-        data: gpd.GeoDataFrame, 
         raster_name: str,
         title: str = None,
         subtitle: str = None, 
         legend_title: str = None,
         annotation: str = None,
-        data_dir = "./data/"
+        data_dir = "./data/",
+        config: dict = None
     ):
+        data = self.data.copy()
+        config_key = "raster"
+        self.refresh_config()
+        if config is not None:
+            self.update_config(key=config_key, config=config)
+            
         iso_code = data.iso_code.values[0]
-        config = self.map_config["raster"]
+        config = self.map_config[config_key]
         raster_file = os.path.join(data_dir, f"{iso_code}/{iso_code}_{raster_name.upper()}.tif")
         fig, ax = plt.subplots(figsize=(config['figsize_x'], config['figsize_y']),  dpi=config['dpi'])
         
@@ -135,6 +180,10 @@ class GeoPlot:
             x=config['legend_title_x'], 
             y=config['legend_title_y']
         )
+
+        tight_bbox = cbar.ax.get_tightbbox(fig.canvas.get_renderer())
+        tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
+        legend_left = tight_bbox_fig.x0
         
         if title is None:
             country = pycountry.countries.get(alpha_3=iso_code).name
@@ -142,38 +191,39 @@ class GeoPlot:
             title = config['title'].format(var_title, country)
         if annotation is None:
             annotation = self._get_annotation([raster_name])
-        self._add_titles_and_annotations(fig, config, title, subtitle, annotation)
+        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
             
         ax.axis("off")
     
             
     def plot_geoboundaries(
         self,
-        data: gpd.GeoDataFrame,
         adm_level: str, 
         title: str = None,
         subtitle: str = None, 
         legend_title: str = None,
         annotation: str = None,
-        group: str = 'group'
+        group: str = 'group',
+        config: dict = None
     ):
-        config = self.map_config["geoboundaries"]
-    
+        config_key = "geoboundaries"
+        self.refresh_config()
+        if config is not None:
+            self.update_config(key=config_key, config=config)
+            
+        config = self.map_config[config_key]
+
+        data = self.data.copy()
         iso_code = data.iso_code.values[0]
-        grouping = None
-        if iso_code in self.adm_config:
-            grouping = self.adm_config[iso_code]
     
         fig, ax = plt.subplots(figsize=(config['figsize_x'], config['figsize_y']),  dpi=config['dpi'])
         data_adm = data.dissolve(adm_level).reset_index()
-    
-        if (grouping is not None) or (group in data.columns):
+
+        legend_left = None
+        if group in data.columns:
             cmap = ListedColormap(config["cmap"])
             edgecolor = config["edgecolor_with_group"]
             linewidth = config["linewidth_with_group"]
-            
-            if group not in data.columns:
-                data[group] = data[adm_level].map(grouping)
                 
             data.dissolve(group).reset_index().plot(
                 group, 
@@ -198,6 +248,11 @@ class GeoPlot:
             ])
             legend.set_title(legend_title)
             legend._legend_box.align = config['group_legend_box_align']
+
+            fig.canvas.draw()
+            bbox = legend.get_window_extent(fig.canvas.get_renderer())
+            bbox_fig = bbox.transformed(fig.transFigure.inverted())
+            legend_left = bbox_fig.x0
         else:
             linewidth = config["linewidth_no_group"]
             edgecolor = config["edgecolor_no_group"]
@@ -219,13 +274,33 @@ class GeoPlot:
         dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
         dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
         
-        self._add_titles_and_annotations(fig, config, title, subtitle, annotation)
+        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
         ax.axis("off")
+
+
+    def _plot_missing(self, ax, data_missing: gpd.GeoDataFrame, config: dict):
+        mpl.rcParams['hatch.linewidth'] = 0.1
+        data_missing.to_crs(config["crs"]).plot(
+            ax=ax, 
+            facecolor=config['missing_color'],
+            hatch=config['missing_hatch'],
+            edgecolor=config['missing_edgecolor'],
+            lw=config['missing_linewidth'],
+            legend=True
+        )
+        mpatch = [mpatches.Patch(
+            facecolor=config['missing_color'], 
+            hatch=config['missing_hatch'], 
+            edgecolor=config['missing_edgecolor'], 
+            linewidth=config['missing_linewidth']*1.5,
+            label='No data'
+        )]
+        ax.legend(handles=mpatch, loc='lower right', frameon=False, fontsize=8)
+        return ax
 
 
     def plot_bivariate_choropleth(
         self,
-        data: gpd.GeoDataFrame,
         var1: str,
         var2: str,
         var1_bounds: list = None,
@@ -239,9 +314,16 @@ class GeoPlot:
         subtitle: str = None, 
         annotation: str = None,
         binning: str = "quantiles",
-        nbins: int = 4
+        nbins: int = 4,
+        update_config: dict = None
     ):
-        config = self.map_config["bivariate_choropleth"]
+        config_key = "bivariate_choropleth"
+        self.refresh_config()
+        if update_config is not None:
+            self.update_config(key=config_key, config=update_config)
+            
+        config = self.map_config[config_key]
+        data = self.data.copy()
         data = data.to_crs(config['crs'])
         iso_code = data.iso_code.values[0]
 
@@ -249,22 +331,9 @@ class GeoPlot:
             var1_categories, var1_bins = pd.qcut(data[var1], nbins, labels=range(nbins), retbins=True)
             var2_categories, var2_bins = pd.qcut(data[var2], nbins, labels=range(nbins), retbins=True)
             
-        elif binning == "equal_interval":
-            def cut(series, var_bounds, nbins):
-                def get_bins(var_bounds, nbins):
-                    if len(var_bounds) == nbins + 1:
-                        return var_bounds
-                    else:
-                        return np.linspace(var_bounds[0], var_bounds[-1], nbins+1)
-
-                if var_bounds is not None:
-                    var_bins = get_bins(var_bounds, nbins)  
-                    return pd.cut(series, bins=var_bins, labels=range(nbins), retbins=True, include_lowest=True)
-                else:
-                    return pd.cut(series, nbins, labels=range(nbins), retbins=True, include_lowest=True)
-
-            var1_categories, var1_bins = cut(data[var1], var1_bounds, nbins)
-            var2_categories, var2_bins = cut(data[var2], var2_bounds, nbins)
+        elif binning == "equal_intervals":
+            var1_categories, var1_bins = self.cut(data[var1], var1_bounds, nbins)
+            var2_categories, var2_bins = self.cut(data[var2], var2_bounds, nbins)
              
         var1_edges = list(var1_bins)
         var2_edges = list(var2_bins)
@@ -284,7 +353,6 @@ class GeoPlot:
         data_missing = data_plot[data_plot["cmap"].isna()]
         data_plot["cmap"] = data_plot["cmap"].fillna(config['missing_color'])
 
-        mpl.rcParams['hatch.linewidth'] = 0.1
         fig, ax = plt.subplots(figsize=(config['figsize_x'], config['figsize_y']),  dpi=config['dpi'])
         data.to_crs(config["crs"]).plot(
             ax=ax,  
@@ -293,35 +361,18 @@ class GeoPlot:
             lw=config['linewidth'], 
         )
         if len(data_missing) > 0:
-            data_missing.to_crs(config["crs"]).plot(
-                ax=ax, 
-                facecolor=config['missing_color'],
-                hatch=config['missing_hatch'],
-                edgecolor=config['missing_edgecolor'],
-                lw=config['missing_linewidth'],
-                legend=True
-            )
-            mpatch = [mpatches.Patch(
-                facecolor=config['missing_color'], 
-                hatch=config['missing_hatch'], 
-                edgecolor=config['missing_edgecolor'], 
-                linewidth=config['missing_linewidth']*1.5,
-                label='No data'
-            )]
-            ax.legend(handles=mpatch, loc='lower right', frameon=False, fontsize=8)
+            ax = self._plot_missing(ax, data_missing, config)
+            
         ax.axis("off")
 
-        ncols = nbins
-        nrows = nbins
+        ncols, nrows = nbins, nbins
         alpha = 1
 
-        ax2 = fig.add_axes([0.2, 0.7, 0.1, 0.1])
+        ax2 = fig.add_axes([config["legend_x"], 0.7, 0.1, 0.1])
         ax2.set_aspect('equal', adjustable='box')
-
-        # Compute cell width/height
+        
         col_width = 1 / ncols
         row_height = 1 / nrows
-        
         color_index = 0
         
         for col in range(ncols):
@@ -348,8 +399,8 @@ class GeoPlot:
         var2_labels = [data_utils._humanize(x) for x in var2_edges]
 
         tickpos = np.linspace(0, 1, nbins+1)
-        ax2.set_xticks(tickpos, var1_labels, fontsize=5)
-        ax2.set_yticks(tickpos, var2_labels, fontsize=5)
+        ax2.set_xticks(tickpos, var1_labels, fontsize=config["legend_fontsize"])
+        ax2.set_yticks(tickpos, var2_labels, fontsize=config["legend_fontsize"])
 
         if legend1_title is None:
             legend1_title = self._get_title(var1, "legend_titles")
@@ -361,6 +412,9 @@ class GeoPlot:
 
         ax2.set_ylabel(legend2_title, fontsize=6, ha='left')
         ax2.xaxis.set_label_coords(0, -0.25)
+
+        tight_bbox = ax2.get_tightbbox(fig.canvas.get_renderer())
+        tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
 
         dissolved = data.dissolve("iso_code")
         dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
@@ -387,12 +441,11 @@ class GeoPlot:
         var1_title, var2_title = get_names(var1_title, var2_title, "exposure", remove_from_latter=False)
         
         title = config['title'].format(var1_title, var2_title, country)
-        self._add_titles_and_annotations(fig, config, title, subtitle, annotation)
+        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=tight_bbox_fig.x0)
                 
 
     def plot_choropleth(
         self,
-        data: gpd.GeoDataFrame,
         var: str, 
         var_title: str = None, 
         title: str = None,
@@ -401,11 +454,16 @@ class GeoPlot:
         annotation: str = None,
         vmin: float = None,
         vmax: float = None,
-        legend: bool = False,
-        adm_level: str="ADM3"
+        zoom_to: dict = None,
+        update_config: dict = None
     ):
-        config = self.map_config["choropleth"]
-        
+        config_key = "choropleth"
+        self.refresh_config()
+        if update_config is not None:
+            self.update_config(key=config_key, config=update_config)
+        config = self.map_config[config_key]
+
+        data = self.data.copy()
         data = data.to_crs(config['crs'])
         iso_code = data.iso_code.values[0]
 
@@ -418,12 +476,25 @@ class GeoPlot:
         else:
             cmap = pypalettes.load_cmap(config['palette_name'], cmap_type=config['cmap_type'])
 
+        dissolved = data.dissolve("iso_code")
+        dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)  
+
+        dissolved_zoomed = None
+        if zoom_to is not None:            
+            data = []
+            for key, value in zoom_to.items():
+                selected = self.data[self.data[key].isin([value])].to_crs(config['crs'])
+                data.append(selected)   
+                
+            data = gpd.GeoDataFrame(pd.concat(data), geometry="geometry")
+            dissolved_zoomed = data.dissolve("iso_code")
+            
         legend_kwds = dict()
         if config['legend_type'] == 'colorbar':
             legend = True
             legend_kwds = {
                 'shrink': config['legend_shrink'], 
-                'location': config['legend_location']
+                'location': "left"
             }
             
         mpl.rcParams['hatch.linewidth'] = 0.1
@@ -437,44 +508,40 @@ class GeoPlot:
     
         if 'relative' in var:
             data[var] = data[var] * 100
-        if vmin is None and vmax is None:
-            #if "relative" in var:
-            #    vmin = 0
-            #    vmax = 100
-            #else:
-            vmin = data[var].min()
-            vmax = data[var].max()
             
-        data.plot(
-            var, 
-            ax=ax, 
-            legend=legend, 
-            cmap=cmap, 
-            edgecolor=config['edgecolor'], 
-            scheme=None,
-            lw=config['linewidth'], 
-            legend_kwds=legend_kwds, 
-            missing_kwds=missing_kwds,
-            vmin=vmin,
-            vmax=vmax
-        )   
-    
+        if vmin is None:
+            vmin = data[var].min()
+        if vmax is None:
+            vmax = data[var].max()
+
+        fig.canvas.draw()
+        pos = ax.get_position()
+        legend_left = None
+        
         if config['legend_type'] == 'colorbar':
+            data.plot(
+                var, 
+                ax=ax, 
+                legend=True, 
+                cmap=cmap, 
+                edgecolor=config['edgecolor'], 
+                lw=config['linewidth'], 
+                legend_kwds=legend_kwds, 
+                missing_kwds=missing_kwds,
+                vmin=vmin,
+                vmax=vmax
+            )  
             cbar = fig.axes[1]
             cbar.tick_params(labelsize=config['legend_label_fontsize'])
             cbar.set_title(
                 legend_title, 
-                fontsize=config['legend_title_fontsize'], 
-                loc=config['legend_title_loc'], 
-                x=config['legend_title_x'], 
-                y=config['legend_title_y']
-            )
-            def custom_format(value, tick_number):
-                if value > 1:
-                    return f"{value:,.1f}"
-                else:
-                    return f"{value:,.2f}"
-            cbar.yaxis.set_major_formatter(mticker.FuncFormatter(custom_format))
+                fontsize=config['legend_title_fontsize']
+            )                
+            cbar.yaxis.set_major_formatter(mticker.FuncFormatter(data_utils._humanize))
+
+            tight_bbox = cbar.get_tightbbox(fig.canvas.get_renderer())
+            tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
+            legend_left = tight_bbox_fig.x0
     
         elif config['legend_type'] == 'barplot':
             iax = ax.inset_axes(bounds=[
@@ -485,17 +552,37 @@ class GeoPlot:
             ])   
             iax.set_xticks([])
             iax.spines[["top", "right", "bottom"]].set_visible(False)
-
             
             nbins = min(data[var].nunique(), config["barplot_nbins"])
-            bins = np.linspace(vmin, vmax, nbins + 1)
+            categories, bins = self.cut(data[var], [vmin, vmax], nbins)
+            data["categories"] = categories.astype('Int64')
+            data["categories"] = data["categories"].fillna(-1)
+            
             bin_width = bins[1] - bins[0]
             y_ticks = bins[:-1] + bin_width / 2
     
             colors = [cmap((val - min(bins)) / (max(bins) - min(bins))) for val in bins]
+            color_mapping = {category: color for category, color in zip(range(nbins), colors)}
+            color_mapping[-1] = config['missing_color']
+
+            data_missing = data[data["categories"] == -1]
+            data["colors"] = data["categories"].map(color_mapping)
+
+            data.plot(
+                ax=ax, 
+                color=data["colors"],
+                edgecolor=config['edgecolor'], 
+                lw=config['linewidth'], 
+                legend_kwds=legend_kwds, 
+                missing_kwds=missing_kwds,
+                vmin=vmin,
+                vmax=vmax
+            )  
+            if len(data_missing) > 0:
+                ax = self._plot_missing(ax, data_missing, config)
+            
             n = iax.hist(data[var], bins=bins, orientation='horizontal', alpha=0)[0]
             iax.barh(y_ticks, n, height=bin_width, color=colors)
-            
             iax.set_yticks(
                 y_ticks, 
                 labels=[
@@ -505,10 +592,7 @@ class GeoPlot:
                 size=config["barplot_tick_size"]
             ) 
     
-            # Get the current y-axis tick label positions
             iax.figure.canvas.draw()
-    
-            # Get the bounding box of y-axis tick labels in display coords
             tick_label_boxes = [
                 label.get_window_extent() 
                 for label in iax.get_yticklabels() 
@@ -550,6 +634,16 @@ class GeoPlot:
                 )
                 
             iax.tick_params(axis="y", length=2)
+            tight_bbox = iax.get_tightbbox(fig.canvas.get_renderer())
+            tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
+            legend_left = tight_bbox_fig.x0
+
+
+        if dissolved_zoomed is not None:
+            dissolved_zoomed.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");  
+        else:
+            dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");  
+
             
         if data[var].isnull().any():
             missing_patch = mpatches.Patch(
@@ -567,10 +661,6 @@ class GeoPlot:
                 loc=config["missing_legend_loc"],  
                 bbox_transform=fig.transFigure
             )
-    
-        dissolved = data.dissolve("iso_code")
-        dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
-        dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");        
 
         if var_title is None:
             var_title = self._get_title(var, "var_titles").title()
@@ -578,136 +668,139 @@ class GeoPlot:
             annotation = self._get_annotation([var])
 
         country = pycountry.countries.get(alpha_3=iso_code).name
-        title = config['title'].format(var_title, country)
+        if zoom_to is not None:
+            subunit = ", ".join([value for value in zoom_to.values()])
+            country = f"{subunit}, {country}"
+            x_axes_coord = ax.transAxes.inverted().transform(
+                fig.transFigure.transform([legend_left, 0])
+            )[0]
+            iax = ax.inset_axes(
+                bounds=[
+                    x_axes_coord,
+                    0.575,
+                    0.4,
+                    0.4
+                ],
+            )
+            iax.set_axis_off()
+            dissolved.plot(ax=iax, facecolor="lightgray")
+            data.dissolve("iso_code").plot(ax=iax, facecolor="whitesmoke", edgecolor="lightgray", lw=0.45)
 
-        self._add_titles_and_annotations(fig, config, title, subtitle, annotation)
+        title = config['title'].format(var_title, country)
+        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
         ax.axis("off")
     
     
-    def plot_folium(
-        self,
-        data: gpd.GeoDataFrame,
-        acled: gpd.GeoDataFrame,
-        var: str, 
-        var_title: str = None, 
-        adm_level: str = "ADM3",
-        acled_group_name: str = None
+    def _add_titles_and_annotations(
+        self, 
+        fig, 
+        ax, 
+        config, 
+        title, 
+        subtitle, 
+        annotation, 
+        x: float = None,
+        subtitle_gap: float = 0.02
     ):
-        config = self.map_config["folium"]
+        y0 = ax.get_position().y0
+        y1 = ax.get_position().y1  
+        
+        title_x, title_y = x, y1
+        if 'title_x' in config:
+            title_x = config['title_x']
+        if 'title_y' in config:
+            title_y = config['title_y']
 
-        if var_title is None:
-            var_title = self._get_title(var, "var_titles").title()
-    
-        original_crs = data.crs
-        centroid = data.dissolve("iso_code").to_crs(config["meter_crs"]).centroid
-        transformer = pyproj.Transformer.from_crs(
-            pyproj.CRS(config["meter_crs"]), pyproj.CRS(original_crs), always_xy=True
-        )
-        x, y = transformer.transform(centroid.x.iloc[0], centroid.y.iloc[0])
-    
-        m = folium.Map(location=[y, x], tiles=config["tiles"], zoom_start=config["zoom_start"])
-        key_on = f"feature.properties.{adm_level}_ID"
-        folium.Choropleth(
-            data=data,
-            geo_data=data.to_json(),
-            columns=[f"{adm_level}_ID", var],
-            key_on=key_on,
-            fill_opacity=config["fill_opacity"],
-            fill_color=config["fill_color"],
-            line_color=config["line_color"],
-            name=var_title,
-            legend_name=var_title
-        ).add_to(m)
-        
-        style_function = lambda x: {
-            'fillColor': '#ffffff', 
-            'color': '#000000', 
-            'fillOpacity': 0.1, 
-            'weight': 0.1,
-            'lineColor': '#ffffff', 
-        }
-        highlight_function = lambda x: {
-            'fillColor': '#000000', 
-            'color':'#000000', 
-            'fillOpacity': 0.50, 
-            'weight': 0.1
-        }
-        nil = folium.features.GeoJson(
-            data,
-            style_function=style_function, 
-            highlight_function=highlight_function, 
-            tooltip=folium.features.GeoJsonTooltip(
-                fields=[adm_level, var], 
-                aliases=[f'{adm_level}: ', f'{var_title}: ']
-            ),
-            control=False
-        )
-        m.add_child(nil)
-        m.keep_in_front(nil)
-    
-    
-        if acled is not None:
-            points_group = folium.FeatureGroup(name=acled_group_name)
-            fill_colors = ["#a8225e", "#bc5090", "#ff6361", "#ffa600"]
-            points_var = "disorder_type"
-        
-            categories = acled[points_var].unique()
-            acled["fill_color"] = None
-            for fill_color, category in zip(fill_colors[:len(categories)], categories):
-                acled.loc[acled[points_var] == category, "fill_color"] = fill_color
-            
-            for index, row in acled.iterrows():
-                popup = """
-                <b>Disorder type:</b> %s<br>
-                <b>Event type:</b> %s<br>
-                <b>Subevent type:</b> %s<br>
-                """ % (
-                    row['disorder_type'],
-                    row['event_type'],
-                    row['sub_event_type']
-                )
-                folium.CircleMarker(
-                    location=[row.geometry.y, row.geometry.x], 
-                    stroke=False,
-                    fill=True, 
-                    fill_color=row['fill_color'],
-                    radius=4,
-                    tooltip=popup
-                ).add_to(points_group)
-            
-            
-                points_group.add_to(m)
-                m.keep_in_front(points_group)
-                
-        folium.LayerControl().add_to(m)
-        return m
-    
-    
-    def _add_titles_and_annotations(self, fig, config, title, subtitle, annotation):
-        fig.text(
-            x=config['title_x'], 
-            y=config['title_y'], 
-            s=title, 
-            size=config['title_fontsize'], 
-            font=bold
-        )
-        if subtitle is not None:
+        if title is not None:
             fig.text(
-                x=config['subtitle_x'], 
-                y=config['subtitle_y'], 
+                x=title_x, 
+                y=title_y, 
+                s=title, 
+                size=config['title_fontsize'], 
+                font=bold
+            )
+            
+        if subtitle is not None:
+            subtitle_x, subtitle_y = x, y1
+            if 'subtitle_x' in config:
+                subtitle_x = config['subtitle_x']  
+
+            if subtitle_y is not None:
+                subtitle_y -= subtitle_gap
+            elif 'subtitle_y' in config:
+                subtitle_y = config['subtitle_y']
+                
+            fig.text(
+                x=subtitle_x, 
+                y=subtitle_y, 
                 s=subtitle, 
                 size=config['subtitle_fontsize'], 
                 font=regular
             )
+            
         if annotation is not None:
+            annotation_x, annotation_y = x, y0
+            if 'annotation_x' in config:
+                annotation_x = config['annotation_x']
+            elif annotation_x is None:
+                annotation_x = title_x
+                
+            if 'annotation_y' in config:
+                annotation_y = config['annotation_y']
+            
             fig.text(
-                x=config['annotation_x'], 
-                y=config['annotation_y'], 
+                x=annotation_x, 
+                y=annotation_y, 
                 s=annotation, 
                 size=config['annotation_fontsize'], 
                 color=config['annotation_color'], 
                 font=regular
             )
+
+            
+    def _get_title(self, var: str, config_key:str):
+        legend_titles = self.map_config[config_key]
+        for key, title in legend_titles.items():
+            if key == var:
+                return title
+            elif key in var:
+                if "conflict" in var:
+                    return title.format("conflict")
+                elif "mhs" in var:
+                    return title.format("multi-hazard")
+                else:
+                    hazard = var.replace("_" + key, "").replace("_", " ")
+                    return title.format(hazard)
+                    
+        return var.replace("_", " ").title() + " Risk"
+
+    
+    def _get_annotation(self, var_list: list = []):
+        annotations = self.map_config["annotations"]
+        annotation = "Source: \n"
+
+        anns = []
+        for var in var_list:
+            for key, ann in annotations.items():
+                if key in var:
+                    if ann not in anns:
+                        anns.append(ann)
+                        annotation += ann + "\n"
+        return annotation
+
+
+    def cut(self, series, var_bounds, nbins):
+        def get_bins(var_bounds, nbins):
+            if len(var_bounds) == nbins + 1:
+                return var_bounds
+            else:
+                return np.linspace(var_bounds[0], var_bounds[-1], nbins+1)
+
+        if var_bounds is not None:
+            var_bins = get_bins(var_bounds, nbins)  
+            return pd.cut(series, bins=var_bins, labels=range(nbins), retbins=True, include_lowest=True)
+        else:
+            return pd.cut(series, nbins, labels=range(nbins), retbins=True, include_lowest=True)
 
 
   
