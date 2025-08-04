@@ -3,24 +3,16 @@ raster:
     figsize_y: 10
     dpi: 300
 
-    title_x: 0.15
-    title_y: 0.89
     title_fontsize: 13
-    
-    subtitle_x: 0.15
-    subtitle_y: 0.87
     subtitle_fontsize: 10
+    annotation_fontsize: 6
+    annotation_color: "#909090"
 
     legend_title_x: 1.0
     legend_title_y: 1.025
     legend_title_loc: "center"
     legend_title_fontsize: 7
     legend_label_fontsize: 7
-
-    annotation_x: 0.15
-    annotation_y: 0.125
-    annotation_fontsize: 6
-    annotation_color: "#909090"
     
     title: "{} in {}"
     cmap: "YlGnBu"
@@ -40,16 +32,8 @@ geoboundaries:
     figsize_y: 10
     dpi: 300
 
-    title_x: 0.15
-    title_y: 0.89
     title_fontsize: 15
-    
-    subtitle_x: 0.15
-    subtitle_y: 0.87
     subtitle_fontsize: 10
-
-    annotation_x: 0.15
-    annotation_y: 0.125
     annotation_fontsize: 6
     annotation_color: "#909090"
 
@@ -85,24 +69,19 @@ bivariate_choropleth:
     dpi: 300
     crs: "EPSG:3857"
 
-    title: "{} and {} in {}"
-    title_x: 0.15
-    title_y: 0.89
-    title_fontsize: 15
-    
-    subtitle_x: 0.15
-    subtitle_y: 0.87
-    subtitle_fontsize: 10
-
-    annotation_x: 0.15
-    annotation_y: 0.125
-    annotation_fontsize: 6
-    annotation_color: "#909090"
-
     linewidth: 0.15
     edgecolor: "white"
     font_type: "Roboto"
 
+    title: "{} and {} in {}"
+    title_fontsize: 15
+    subtitle_fontsize: 10
+    annotation_fontsize: 6
+    annotation_color: "#909090"
+
+    legend_x: 0.2
+    legend_fontsize: 5
+    
     missing_color: "gainsboro"
     missing_edgecolor: "dimgray"
     missing_linewidth: 0.15
@@ -119,7 +98,11 @@ bivariate_choropleth:
     ]
 
     cmap5: [
-        "#afafaf", "#a1abaf", "#92a7af", "#84a4b0", "#75a0b1", "#a79595", "#9a9296", "#8c8f96", "#7e8c96", "#708897", "#9f7a7b", "#92787c", "#85757c", "#78737c", "#6a707d", "#976061", "#8b5e61", "#7f5c61", "#725a62", "#655862", "#8f4445", "#844345", "#784145", "#6c4045", "#603e46"
+        "#afafaf", "#a1abaf", "#92a7af", "#84a4b0", "#75a0b1", 
+        "#a79595", "#9a9296", "#8c8f96", "#7e8c96", "#708897", 
+        "#9f7a7b", "#92787c", "#85757c", "#78737c", "#6a707d", 
+        "#976061", "#8b5e61", "#7f5c61", "#725a62", "#655862", 
+        "#8f4445", "#844345", "#784145", "#6c4045", "#603e46"
     ]
 
     cmap5_aqua: [
@@ -142,34 +125,23 @@ choropleth:
     font_type: "Roboto"
 
     title: "{} in {}"
-    title_x: 0.15
-    title_y: 0.89
     title_fontsize: 15
-    
-    subtitle_x: 0.15
-    subtitle_y: 0.87
     subtitle_fontsize: 10
-
-    annotation_x: 0.15
-    annotation_y: 0.125
     annotation_fontsize: 6
     annotation_color: "#909090"
     
-    legend: False
-    legend_title_x: -5
-    legend_title_y: 1.025
+    legend_title_x: -5.05
+    legend_title_y: 1.05
     legend_type: 'barplot'
     
-    legend_label_fontsize: 7
     legend_shrink: 0.25
-    legend_location: 'left'
-    legend_title_fontsize: 7
-    legend_title_loc: "left"
     legend_title_gap: 1.025
+    legend_title_fontsize: 7
+    legend_label_fontsize: 7
 
-    barplot_nbins: 10
     barplot_x: -0.25
     barplot_y: 0.25
+    barplot_nbins: 10
     barplot_width: 0.2
     barplot_height: 0.2
     barplot_tick_size: 6
@@ -198,12 +170,24 @@ choropleth:
 
 folium:
     tiles: 'cartodbpositron'
-    zoom_start: 7
+    zoom_start: 6
     fill_opacity: 0.9
     fill_color: "YlGnBu"
     line_color: "lightgrey"
     meter_crs: "EPSG:3857"
-    acled_group_name: 'ACLED Conflict Events'
+    
+    style_function:
+        fillColor: '#ffffff' 
+        color: '#000000' 
+        fillOpacity: 0.1 
+        weight: 0.1
+        lineColor: '#ffffff'
+    
+    highlight_function:
+        fillColor: '#000000'
+        color: '#000000' 
+        fillOpacity: 0.50, 
+        weight: 0.1
 
 
 legend_titles:
@@ -215,11 +199,13 @@ legend_titles:
     earthquake: "Peak Ground \nAcceleration (PGA)"
     cyclone: "Windspeed"
 
+
 var_titles:
     worldpop: "Population"
     mhs_dfcv_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
     exposure_relative: "Relative {} Exposure"
     exposure: "Absolute {} Exposure"
+
     
 annotations:
     mhs: "Multi-hazard Score, The World Bank Group, 2025"
