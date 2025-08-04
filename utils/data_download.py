@@ -49,8 +49,10 @@ class DatasetManager:
         asset: str = "worldpop",
         global_name: str = "global",
         overwrite: bool = False,
+        group: str = "Region",
         config_file: str = "configs/config.yaml",
-        acled_file: str = "configs/acled_creds.yaml"
+        acled_file: str = "configs/acled_creds.yaml",
+        adm_config_file: str = "configs/adm_config.yaml"
     ):
         self.iso_code = iso_code
         self.adm_level = adm_level
@@ -94,9 +96,12 @@ class DatasetManager:
 
         self.asset_file = self._build_filename(iso_code, asset, self.local_dir, ext="tif")
 
-        logging.info("Loading geoboundary...")
-        self.adm_source = adm_source
-        self.geoboundary = self.download_geoboundary()
+        logging.info("Loading geoboundary from geoboundaries...")
+        try:
+            self.geoboundary = self.download_geoboundary(adm_source)
+        except:
+            logging.info("Loading geoboundaries failed. Trying with GADM...")
+            self.geoboundary = self.download_geoboundary(adm_source="gadm")
         self.merge_columns = list(self.geoboundary.columns)
         
         logging.info("Loading hazard layers...")
@@ -108,7 +113,21 @@ class DatasetManager:
         self.acled_agg = self.download_acled(aggregate=True)
         self.data = self.combine_datasets()
 
+        self.adm_config = data_utils.read_config(adm_config_file)
+        self.data = self.assign_grouping()
 
+
+    def assign_grouping(self):
+        if self.iso_code in self.adm_config:
+            config = self.adm_config[self.iso_code]
+            group = config["group"]
+            if group not in self.data.columns:
+                adm_level = config["adm_level"]
+                grouping = config["grouping"]
+                self.data[group] = self.data[adm_level].map(grouping)
+        return self.data
+
+    
     def combine_datasets(self) -> gpd.GeoDataFrame:
         data = []
         for dataset in [self.hazards, self.fathom]:
@@ -116,8 +135,9 @@ class DatasetManager:
                 dataset = dataset.mask(dataset.isna(), 0)
                 data.append(dataset)
 
-        if len(self.acled_agg) > 0:
-            data.append(self.acled_agg)
+        if self.acled_agg is not None:
+            if len(self.acled_agg) > 0:
+                data.append(self.acled_agg)
 
         data = data_utils._merge_data(data, columns=self.merge_columns)    
         data = self.calculate_multihazard_score(data)
@@ -155,13 +175,14 @@ class DatasetManager:
             mhsc_name = f"mhs_{conflict_column}"
             if suffix is not None:
                 mhsc_name = f"{mhsc_name}_{suffix}"
-    
-            data[mhsc_name] = data[mhs_name] * data[f"{conflict_column}_{suffix}"]
+
+            if f"{conflict_column}_{suffix}" in data.columns:
+                data[mhsc_name] = data[mhs_name] * data[f"{conflict_column}_{suffix}"]
     
         return data
 
     
-    def download_geoboundary(self) -> gpd.GeoDataFrame:
+    def download_geoboundary(self, adm_source: str) -> gpd.GeoDataFrame:
         out_file = self._build_filename(
             self.iso_code, self.adm_level, self.local_dir, ext="geojson"
         )
@@ -169,8 +190,8 @@ class DatasetManager:
         if self.overwrite or not os.path.exists(out_file):
             logging.info(f"Downloading geoboundary for {self.iso_code}...")
 
-            if self.adm_source == 'gadm':
-                self.download_url(self.adm_source, dataset_name=self.adm_level, ext="geojson")
+            if adm_source == 'gadm':
+                self.download_url(adm_source, dataset_name=self.adm_level, ext="geojson")
                 geoboundary = gpd.read_file(out_file)
                 
                 rename = dict()
@@ -186,7 +207,7 @@ class DatasetManager:
                 geoboundary = geoboundary[all_columns]
                 geoboundary.to_file(out_file)
                 
-            elif self.adm_source == "geoboundary":
+            elif adm_source == "geoboundary":
                 gbhumanitarian_url = self.config["urls"]["gbhumanitarian_url"]
                 gbopen_url = self.config["urls"]["gbopen_url"]
                 level = int(self.adm_level[-1])
@@ -291,6 +312,9 @@ class DatasetManager:
                 params["page"] = params["page"] + 1
     
             data = pd.concat(data)
+            if len(data) == 0:
+                return
+                
             data = gpd.GeoDataFrame(
                 geometry=gpd.points_from_xy(data["longitude"], data["latitude"], crs=self.crs),
                 data=data,
@@ -315,7 +339,7 @@ class DatasetManager:
             acled = self._exclude_filter(acled, self.acled_exclude)
     
         if aggregate:
-            admin = self.download_geoboundary()
+            admin = self.geoboundary
             acled = self._aggregate_acled(
                 acled_file=out_file,
                 agg_file=agg_file,
@@ -439,7 +463,7 @@ class DatasetManager:
             else:
                 return np.nansum(a, **kwargs)
 
-        admin = self.download_geoboundary()
+        admin = self.geoboundary
         agg = acled.sjoin(admin, how="left", predicate="intersects")
         agg = agg.drop(["index_right"], axis=1)
     
@@ -497,7 +521,7 @@ class DatasetManager:
             nodata = []
             if dataset in self.config["nodata"]:
                 nodata = self.config["nodata"][dataset]
-            admin = self.download_geoboundary().dissolve(by="iso_code")
+            admin = self.geoboundary.dissolve(by="iso_code")
             data_utils._clip_raster(global_file, local_file, admin, nodata)
     
         else:
@@ -591,7 +615,7 @@ class DatasetManager:
                         shell=True,
                     )
     
-                admin = self.download_geoboundary().dissolve(by="iso_code")
+                admin = self.geoboundary.dissolve(by="iso_code")
                 nodata = self.config["nodata"][folder.lower()]
                 data_utils._clip_raster(raw_tif_file, proc_tif_file, admin, nodata)
     
@@ -785,7 +809,7 @@ class DatasetManager:
     
         if not os.path.exists(out_file):
             admin_file = os.path.join(self.local_dir, f"{self.iso_code}_{self.adm_level}.geojson")
-            admin = self.download_geoboundary()
+            admin = self.geoboundary
             original_crs = admin.crs
     
             with rio.open(in_file) as src:
