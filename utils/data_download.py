@@ -378,15 +378,15 @@ class DatasetManager:
         acled_file: str,
         agg_file: str,
         exposure_raster: str,
-        exposure_vector: str
+        exposure_vector: str,
+        prefix: str = "dfcv",
+        column: str = "conflict_exposure"
     ):
         acled = gpd.read_file(acled_file)
         if not os.path.exists(agg_file):
             self._aggregate_acled_exposure(acled, agg_file)
         agg = gpd.read_file(agg_file)
 
-        column = "conflict_exposure"
-        prefix = "dfcv"
         if not os.path.exists(exposure_vector):
             acled_tif = self._calculate_custom_acled_exposure(acled_file)
             out_tif = self._calculate_exposure(acled_tif, exposure_raster, threshold=1)
