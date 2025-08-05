@@ -580,19 +580,14 @@ class GeoPlot:
             legend_left = tight_bbox_fig.x0
     
         elif config['legend_type'] == 'barplot':
-            # Get main ax position in figure coords
-            #fig.canvas.draw()
             ax_pos = ax.get_position()
-            
-            # Width and height of your legend (tweak as needed or keep from config)
             barplot_width = 0.2
             barplot_height = 0.2
             
-            # Align legend vertically centered with ax and move outside left
             barplot_x = ax_pos.x0 - 2 * barplot_width 
     
             if zoom_to is not None: 
-                barplot_y = ax_pos.y0 + (ax_pos.height - barplot_height) / 2  
+                barplot_y = ax_pos.y0 + 2 * (ax_pos.height - barplot_height) / 5  
             else:
                 barplot_y = ax_pos.y0 + 4 * (ax_pos.height - barplot_height) / 5
             
@@ -601,10 +596,6 @@ class GeoPlot:
                 barplot_y,
                 barplot_width,
                 barplot_height
-                #config["barplot_x"],
-                #config["barplot_y"],
-                #config["barplot_width"],
-                #config["barplot_height"]
             ])   
             iax.set_xticks([])
             iax.spines[["top", "right", "bottom"]].set_visible(False)
