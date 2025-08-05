@@ -114,7 +114,6 @@ class GeoPlot:
         folium.LayerControl().add_to(m)
         return m
     
-
     
     def plot_raster(
         self,
@@ -151,7 +150,6 @@ class GeoPlot:
                 origin='upper'
             )
         
-        # Add colorbar
         bbox_anchor = [
             config["cbar_bbox_x"], 
             config["cbar_bbox_y"], 
@@ -212,7 +210,6 @@ class GeoPlot:
             self.update_config(key=config_key, config=config)
             
         config = self.map_config[config_key]
-
         data = self.data.copy()
         iso_code = data.iso_code.values[0]
     
@@ -260,7 +257,8 @@ class GeoPlot:
         data_adm.plot(ax=ax, facecolor="none", edgecolor=edgecolor, lw=linewidth)
         data_adm.apply(lambda x: ax.annotate(
             text=x[adm_level].replace("(", "\n("), 
-            xy=x.geometry.centroid.coords[0], ha='center', 
+            xy=x.geometry.centroid.coords[0], 
+            ha='center', 
             fontsize=config["fontsize"],
             bbox=dict(
                 facecolor=config["label_facecolor"], 
@@ -315,6 +313,7 @@ class GeoPlot:
         annotation: str = None,
         binning: str = "quantiles",
         nbins: int = 4,
+        zoom_to: dict = None,
         update_config: dict = None
     ):
         config_key = "bivariate_choropleth"
@@ -326,6 +325,20 @@ class GeoPlot:
         data = self.data.copy()
         data = data.to_crs(config['crs'])
         iso_code = data.iso_code.values[0]
+
+        fig, ax = plt.subplots(figsize=(config['figsize_x'], config['figsize_y']),  dpi=config['dpi'])
+        dissolved = data.dissolve("iso_code")
+        dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
+
+        dissolved_zoomed = None
+        if zoom_to is not None:            
+            data = []
+            for key, value in zoom_to.items():
+                selected = self.data[self.data[key].isin([value])].to_crs(config['crs'])
+                data.append(selected)   
+                
+            data = gpd.GeoDataFrame(pd.concat(data), geometry="geometry")
+            dissolved_zoomed = data.dissolve("iso_code")
 
         if binning == "quantiles":
             var1_categories, var1_bins = pd.qcut(data[var1], nbins, labels=range(nbins), retbins=True)
@@ -352,8 +365,7 @@ class GeoPlot:
         data_plot["cmap"] = data_plot['bivariate'].map(cmap_dict)
         data_missing = data_plot[data_plot["cmap"].isna()]
         data_plot["cmap"] = data_plot["cmap"].fillna(config['missing_color'])
-
-        fig, ax = plt.subplots(figsize=(config['figsize_x'], config['figsize_y']),  dpi=config['dpi'])
+        
         data.to_crs(config["crs"]).plot(
             ax=ax,  
             color=data_plot["cmap"], 
@@ -362,13 +374,34 @@ class GeoPlot:
         )
         if len(data_missing) > 0:
             ax = self._plot_missing(ax, data_missing, config)
+
+        if dissolved_zoomed is not None:
+            dissolved_zoomed.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");  
+        else:
+            dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");  
             
         ax.axis("off")
 
         ncols, nrows = nbins, nbins
         alpha = 1
 
-        ax2 = fig.add_axes([config["legend_x"], 0.7, 0.1, 0.1])
+        # Get main ax position in figure coords
+        fig.canvas.draw()
+        ax_pos = ax.get_position()
+        
+        # Width and height of your legend (tweak as needed or keep from config)
+        legend_width = 0.1
+        legend_height = 0.1
+        
+        # Align legend vertically centered with ax and move outside left
+        legend_x = ax_pos.x0 - legend_width - 0.05  
+
+        if zoom_to is not None: 
+            legend_y = ax_pos.y0 + 2 * (ax_pos.height - legend_height) / 5  # vertically centered
+        else:
+            legend_y = ax_pos.y0 + 4 * (ax_pos.height - legend_height) / 5  
+        
+        ax2 = fig.add_axes([legend_x, legend_y, legend_width, legend_height])
         ax2.set_aspect('equal', adjustable='box')
         
         col_width = 1 / ncols
@@ -415,10 +448,7 @@ class GeoPlot:
 
         tight_bbox = ax2.get_tightbbox(fig.canvas.get_renderer())
         tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
-
-        dissolved = data.dissolve("iso_code")
-        dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
-        dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
+        legend_left = tight_bbox_fig.x0
 
         if var1_title is None:
             var1_title = self._get_title(var1, "var_titles").title()
@@ -427,6 +457,11 @@ class GeoPlot:
         if annotation is None:
             annotation = self._get_annotation([var1, var2])
         country = pycountry.countries.get(alpha_3=iso_code).name
+
+        if zoom_to is not None:
+            subunit = ", ".join([value for value in zoom_to.values()])
+            country = f"{subunit}, {country}"
+            self._plot_tiny_map(zoom_to, country, subunit, data, dissolved, fig, ax, ax2, config, x=legend_left)
 
         def get_names(var1_title, var2_title, name: str, remove_from_latter: bool = True):
             if name in var1_title.lower() and name in var2_title.lower():
@@ -439,9 +474,10 @@ class GeoPlot:
         var1_title, var2_title = get_names(var1_title, var2_title, "relative", remove_from_latter=True)
         var1_title, var2_title = get_names(var1_title, var2_title, "absolute", remove_from_latter=True)
         var1_title, var2_title = get_names(var1_title, var2_title, "exposure", remove_from_latter=False)
-        
-        title = config['title'].format(var1_title, var2_title, country)
-        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=tight_bbox_fig.x0)
+
+        if title is None:
+            title = config['title'].format(var1_title, var2_title, country)
+        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
                 
 
     def plot_choropleth(
@@ -452,8 +488,7 @@ class GeoPlot:
         subtitle: str = None, 
         legend_title: str = None,
         annotation: str = None,
-        vmin: float = None,
-        vmax: float = None,
+        var_bounds: list = [None, None],
         zoom_to: dict = None,
         update_config: dict = None
     ):
@@ -463,6 +498,7 @@ class GeoPlot:
             self.update_config(key=config_key, config=update_config)
         config = self.map_config[config_key]
 
+        vmin, vmax = var_bounds
         data = self.data.copy()
         data = data.to_crs(config['crs'])
         iso_code = data.iso_code.values[0]
@@ -531,24 +567,44 @@ class GeoPlot:
                 vmin=vmin,
                 vmax=vmax
             )  
-            cbar = fig.axes[1]
-            cbar.tick_params(labelsize=config['legend_label_fontsize'])
-            cbar.set_title(
+            iax = fig.axes[1]
+            iax.tick_params(labelsize=config['legend_label_fontsize'])
+            iax.set_title(
                 legend_title, 
                 fontsize=config['legend_title_fontsize']
             )                
-            cbar.yaxis.set_major_formatter(mticker.FuncFormatter(data_utils._humanize))
+            iax.yaxis.set_major_formatter(mticker.FuncFormatter(data_utils._humanize))
 
-            tight_bbox = cbar.get_tightbbox(fig.canvas.get_renderer())
+            tight_bbox = iax.get_tightbbox(fig.canvas.get_renderer())
             tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
             legend_left = tight_bbox_fig.x0
     
         elif config['legend_type'] == 'barplot':
+            # Get main ax position in figure coords
+            #fig.canvas.draw()
+            ax_pos = ax.get_position()
+            
+            # Width and height of your legend (tweak as needed or keep from config)
+            barplot_width = 0.2
+            barplot_height = 0.2
+            
+            # Align legend vertically centered with ax and move outside left
+            barplot_x = ax_pos.x0 - 2 * barplot_width 
+    
+            if zoom_to is not None: 
+                barplot_y = ax_pos.y0 + (ax_pos.height - barplot_height) / 2  
+            else:
+                barplot_y = ax_pos.y0 + 4 * (ax_pos.height - barplot_height) / 5
+            
             iax = ax.inset_axes(bounds=[
-                config["barplot_x"],
-                config["barplot_y"],
-                config["barplot_width"],
-                config["barplot_height"]
+                barplot_x,
+                barplot_y,
+                barplot_width,
+                barplot_height
+                #config["barplot_x"],
+                #config["barplot_y"],
+                #config["barplot_width"],
+                #config["barplot_height"]
             ])   
             iax.set_xticks([])
             iax.spines[["top", "right", "bottom"]].set_visible(False)
@@ -638,12 +694,10 @@ class GeoPlot:
             tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
             legend_left = tight_bbox_fig.x0
 
-
         if dissolved_zoomed is not None:
             dissolved_zoomed.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");  
         else:
             dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");  
-
             
         if data[var].isnull().any():
             missing_patch = mpatches.Patch(
@@ -671,24 +725,58 @@ class GeoPlot:
         if zoom_to is not None:
             subunit = ", ".join([value for value in zoom_to.values()])
             country = f"{subunit}, {country}"
-            x_axes_coord = ax.transAxes.inverted().transform(
-                fig.transFigure.transform([legend_left, 0])
-            )[0]
-            iax = ax.inset_axes(
-                bounds=[
-                    x_axes_coord,
-                    0.575,
-                    0.4,
-                    0.4
-                ],
-            )
-            iax.set_axis_off()
-            dissolved.plot(ax=iax, facecolor="lightgray")
-            data.dissolve("iso_code").plot(ax=iax, facecolor="whitesmoke", edgecolor="lightgray", lw=0.45)
+            self._plot_tiny_map(zoom_to, country, subunit, data, dissolved, fig, ax, iax, config, x=legend_left)
 
-        title = config['title'].format(var_title, country)
+        if title is None:
+            title = config['title'].format(var_title, country)
         self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
         ax.axis("off")
+
+
+    def _plot_tiny_map(self, zoom_to, country, subunit, data, dissolved, fig, ax, ax2, config, x):
+        # Get legend (ax2) position and main ax position in figure coords
+        ax_pos = ax.get_position()       
+        ax2_pos = ax2.get_position() 
+    
+        # Horizontal alignment (align left with legend labels)
+        iax_x = x
+        natural_height = ax_pos.y1 - ax2_pos.y1
+        
+        # Max allowed height = 1/3 of ax height
+        max_height = (ax_pos.y1 - ax_pos.y0) / 3
+        
+        # Choose the smaller of the two
+        total_gap = ax_pos.y1 - ax2_pos.y1
+        iax_height = min(natural_height, max_height)
+        iax_y = ax2_pos.y1 + (total_gap - iax_height) / 2
+    
+        # Width (space between legend and ax) 
+        iax_width = ax_pos.x0 - x    
+    
+        # Create tiny map axes in figure coordinates
+        iax = fig.add_axes([iax_x, iax_y, iax_width, iax_height])
+        iax.set_axis_off()
+
+        iax.set_axis_off()
+        dissolved.plot(ax=iax, facecolor="lightgray", edgecolor="lightgray", lw=1)
+        data.dissolve("iso_code").plot(ax=iax, facecolor="bisque", edgecolor="sienna", lw=0.25)
+        
+        xmin, ymin, xmax, ymax = data.dissolve("iso_code").total_bounds
+        iax.annotate(text=subunit,
+            xy=(xmin + abs(xmin - xmax)/2, ymax),
+            xytext=(0, 5),  
+            textcoords='offset points',
+            ha='center',     
+            va='bottom',
+            fontsize=config["fontsize"],
+            bbox=dict(
+                facecolor=config["label_facecolor"], 
+                edgecolor=config["label_edgecolor"], 
+                lw=config["label_linewidth"], 
+                alpha=config["label_alpha"], 
+                boxstyle=config["label_boxstyle"]
+            )
+        )    
     
     
     def _add_titles_and_annotations(
