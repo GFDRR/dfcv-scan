@@ -446,9 +446,10 @@ class DatasetManager:
                 with rio.open(out_file, "w", **out_meta) as dest:
                     dest.write(out_image, 1)
     
-            subprocess.call(
-                ["gdal_rasterize", "-burn", "1", temp_file, out_file], shell=True
-            )
+            #subprocess.call(
+            #    ["gdal_rasterize", "-burn", "1", temp_file, out_file], shell=True
+            #)
+            os.system(f"gdal_rasterize -burn 1 {temp_file} {out_file}")
         return out_file
 
 
