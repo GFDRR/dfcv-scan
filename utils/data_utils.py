@@ -38,7 +38,7 @@ def _humanize(value, number=None):
     if value.is_integer():
         return f"{int(value)}"
     elif value < 1:
-        return f"{value:.2f}"
+        return f"{value:.3f}"
     else:
         return f"{value:.1f}"
 
