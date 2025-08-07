@@ -95,6 +95,7 @@ class DatasetManager:
         os.makedirs(self.global_dir, exist_ok=True)
 
         self.asset_file = self._build_filename(iso_code, asset, self.local_dir, ext="tif")
+        self.admin_file = None
 
         logging.info("Loading geoboundary...")
         try:
@@ -271,6 +272,7 @@ class DatasetManager:
             geoboundary.to_crs(self.crs).to_file(out_file)
             logging.info(f"Geoboundary file saved to {out_file}.")
 
+        self.admin_file = out_file
         self.adm_source = adm_source
         geoboundary = gpd.read_file(out_file).to_crs(self.crs)
         self.merge_columns = list(geoboundary.columns)
@@ -808,7 +810,7 @@ class DatasetManager:
             out_file = os.path.join(self.local_dir, f"{name}_{self.adm_level}.geojson")
     
         if not os.path.exists(out_file):
-            admin_file = os.path.join(self.local_dir, f"{self.iso_code}_{self.adm_level}.geojson")
+            admin_file = self.admin_file
             admin = self.geoboundary
             original_crs = admin.crs
     
