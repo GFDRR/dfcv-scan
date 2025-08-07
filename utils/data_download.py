@@ -96,12 +96,12 @@ class DatasetManager:
 
         self.asset_file = self._build_filename(iso_code, asset, self.local_dir, ext="tif")
 
-        logging.info("Loading geoboundary from geoboundaries...")
+        logging.info("Loading geoboundary...")
         try:
             self.geoboundary = self.download_geoboundary(adm_source)
         except:
             logging.info("Loading geoboundaries failed. Trying with GADM...")
-            self.geoboundary = self.download_geoboundary(adm_source="gadm")
+            self.geoboundary = self.download_geoboundary("gadm")
         self.merge_columns = list(self.geoboundary.columns)
         
         logging.info("Loading hazard layers...")
@@ -156,16 +156,17 @@ class DatasetManager:
                 data[f"{column}_relative"] = data[column] / data[self.asset]
     
         for suffix in suffixes:
-            mhs, total_weight = 0, 0
+            mhs, total_weight = 1, 0
+            epsilon = 0.00001
             for hazard, weight in self.config["hazards"].items():
                 if suffix is not None:
                     hazard = f"{hazard}_{suffix}"
     
                 if hazard in data.columns:
-                    mhs = mhs + (data[hazard] * (weight))
+                    mhs = mhs * ((data[hazard] + epsilon) ** (weight))
                     total_weight += weight
     
-            mhs = mhs / (total_weight)
+            mhs = mhs ** (1 / (total_weight))
     
             mhs_name = "mhs"
             if suffix is not None:
@@ -184,7 +185,7 @@ class DatasetManager:
     
     def download_geoboundary(self, adm_source: str) -> gpd.GeoDataFrame:
         out_file = self._build_filename(
-            self.iso_code, self.adm_level, self.local_dir, ext="geojson"
+            self.iso_code, f"{adm_source}_{self.adm_level}", self.local_dir, ext="geojson"
         )
 
         if self.overwrite or not os.path.exists(out_file):
@@ -215,7 +216,7 @@ class DatasetManager:
                 datasets = []
                 for index in range(1, level+1):
                     adm_level = f"ADM{index}"
-                    intermediate_file = out_file = self._build_filename(
+                    intermediate_file = self._build_filename(
                         self.iso_code, adm_level, self.local_dir, ext="geojson"
                     )
                     url = f"{gbhumanitarian_url}{self.iso_code}/{adm_level}/"
@@ -270,6 +271,7 @@ class DatasetManager:
             geoboundary.to_crs(self.crs).to_file(out_file)
             logging.info(f"Geoboundary file saved to {out_file}.")
 
+        self.adm_source = adm_source
         geoboundary = gpd.read_file(out_file).to_crs(self.crs)
         self.merge_columns = list(geoboundary.columns)
         return geoboundary
@@ -446,9 +448,6 @@ class DatasetManager:
                 with rio.open(out_file, "w", **out_meta) as dest:
                     dest.write(out_image, 1)
     
-            #subprocess.call(
-            #    ["gdal_rasterize", "-burn", "1", temp_file, out_file], shell=True
-            #)
             os.system(f"gdal_rasterize -burn 1 {temp_file} {out_file}")
         return out_file
 
