@@ -17,25 +17,30 @@ logging.basicConfig(level=logging.INFO)
 
 
 def _humanize(value, number=None):
+    if value < 0:
+        return "0"
+
+    # Large numbers: format with K/M using humanize.intword
     if value >= 10:
-        formatter = "%0.1f"
-        if value.is_integer() or str(value)[:-2] == ".0":
-            formatter = "%0.0f"
-        return humanize.intword(value, formatter).replace(
-            " thousand", "K"
-        ).replace(
-            " million", "M"
-        ).replace(
-            ".0", ""
-        )
-    elif value >= 0:
-        if value.is_integer():
-            return '{:0.0f}'.format(value)
-        elif value < 1:
-            return '{:0.2f}'.format(value)
-        else:
-            return '{:0.1f}'.format(value)
-    return 0
+        formatter = "%.1f"
+        if value > 100000:
+            formatter = "%.0f"
+    
+        text = humanize.intword(value, formatter)
+        text = text.replace(" thousand", "K").replace(" million", "M")
+
+        # Remove trailing .0 if present (e.g., "1.0K" → "1K")
+        if text.endswith(".0K") or text.endswith(".0M"):
+            text = text.replace(".0", "")
+        return text
+
+    # Smaller numbers: format directly
+    if value.is_integer():
+        return f"{int(value)}"
+    elif value < 1:
+        return f"{value:.2f}"
+    else:
+        return f"{value:.1f}"
 
 
 def _fill_holes(geometry):
