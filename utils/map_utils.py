@@ -35,10 +35,11 @@ bold = pyfonts.load_google_font("Roboto", weight="bold")
 class GeoPlot:
     def __init__(
         self, 
-        data: gpd.GeoDataFrame,
+        dm,
         map_config_file: str = "configs/map_config.yaml"
     ):
-        self.data = data  
+        self.dm = dm
+        self.data = dm.data  
         self.map_config_file = map_config_file
         self.refresh_config()
 
@@ -125,7 +126,7 @@ class GeoPlot:
         data_dir = "./data/",
         config: dict = None
     ):
-        data = self.data.copy()
+        data = self.dm.data.copy()
         config_key = "raster"
         self.refresh_config()
         if config is not None:
@@ -188,7 +189,9 @@ class GeoPlot:
             var_title = self._get_title(raster_name, "var_titles").title()
             title = config['title'].format(var_title, country)
         if annotation is None:
-            annotation = self._get_annotation([raster_name])
+            annotation = self._get_annotation([raster_name], add_adm=False)
+        else:
+            annotation = self._get_annotation([raster_name], add_adm=False) + f"{annotation}\n"
         self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
             
         ax.axis("off")
@@ -215,6 +218,9 @@ class GeoPlot:
     
         fig, ax = plt.subplots(figsize=(config['figsize_x'], config['figsize_y']),  dpi=config['dpi'])
         data_adm = data.dissolve(adm_level).reset_index()
+
+        if legend_title is None:
+            legend_title = config["legend_title"]
 
         legend_left = None
         if group in data.columns:
@@ -271,7 +277,17 @@ class GeoPlot:
         dissolved = data.dissolve("iso_code")
         dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
         dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
+
+        iso_code = data.iso_code.values[0]
+        country = pycountry.countries.get(alpha_3=iso_code).name
+        if title is None:
+            title = config['title'].format(country)
+        if annotation is None:
+            annotation = self._get_annotation()
+        else:
+            annotation = self._get_annotation() + f"{annotation}\n"
         
+            
         self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
         ax.axis("off")
 
@@ -456,6 +472,8 @@ class GeoPlot:
             var2_title = self._get_title(var2, "var_titles").title()
         if annotation is None:
             annotation = self._get_annotation([var1, var2])
+        else:
+            annotation = self._get_annotation([var1, var2]) + f"{annotation}\n"
         country = pycountry.countries.get(alpha_3=iso_code).name
 
         if zoom_to is not None:
@@ -711,6 +729,8 @@ class GeoPlot:
             var_title = self._get_title(var, "var_titles").title()
         if annotation is None:
             annotation = self._get_annotation([var])
+        else:
+            annotation = self._get_annotation([var]) + f"{annotation}\n"
 
         country = pycountry.countries.get(alpha_3=iso_code).name
         if zoom_to is not None:
@@ -854,9 +874,12 @@ class GeoPlot:
         return var.replace("_", " ").title() + " Risk"
 
     
-    def _get_annotation(self, var_list: list = []):
+    def _get_annotation(self, var_list: list = [], add_adm: bool = True):
         annotations = self.map_config["annotations"]
         annotation = "Source: \n"
+
+        if add_adm:
+            var_list += [self.dm.adm_source.lower()]
 
         anns = []
         for var in var_list:
