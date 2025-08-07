@@ -113,6 +113,9 @@ geoboundaries:
     figsize_y: 10
     dpi: 300
 
+    title: "{} Adminstrative Units"
+    legend_title: "Regional Groupings"
+    
     title_fontsize: 15
     subtitle_fontsize: 10
     annotation_fontsize: 6
@@ -200,6 +203,7 @@ folium:
 
 legend_titles:
     worldpop: "Population per unit"
+    conflict_count: "Number of conflict events"
     mhs_dfcv_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
     mhs_exposure_relative: "Multi-hazard Exposure Index"
     exposure_relative: "Proportion of the population \nexposed to {} (%)"
@@ -210,12 +214,16 @@ legend_titles:
 
 var_titles:
     worldpop: "Population"
+    conflict_count: "Number of conflict events"
     mhs_dfcv_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
     exposure_relative: "Relative {} Exposure"
     exposure: "Absolute {} Exposure"
 
     
 annotations:
+    geoboundary: "Administrative boundaries from geoBoundaries (Runfola, D. et al., 2020)"
+    gadm: "Administrative boundaries from GADM v4.1"
+    mimu: "Administrative boundaries from Myanmar Information Management Unit (MIMU) v9.4"
     mhs: "Multi-hazard Score, The World Bank Group, 2025"
     earthquake: "Global Earthquake Model (GEM) Seismic Hazard Map (version 2023.1 - June 2023)"
     landslide: "Global Landslide Hazard Map, The World Bank (2021)"
