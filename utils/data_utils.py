@@ -16,6 +16,26 @@ from shapely.geometry import Polygon, MultiPolygon
 logging.basicConfig(level=logging.INFO)
 
 
+def _minmax_scale(data):
+    """
+    Performs Min-Max scaling on a NumPy array or Pandas Series.
+
+    Args:
+        data (np.ndarray or pd.Series): The input data to be scaled.
+
+    Returns:
+        np.ndarray or pd.Series: The scaled data.
+    """
+    min_val = np.min(data)
+    max_val = np.max(data)
+
+    if max_val == min_val:  # Handle cases where all values are the same
+        return np.zeros_like(data, dtype=float)
+    
+    scaled_data = (data - min_val) / (max_val - min_val)
+    return scaled_data
+
+
 def _humanize(value, number=None):
     if value < 0:
         return "0"
