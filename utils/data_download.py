@@ -50,6 +50,7 @@ class DatasetManager:
         global_name: str = "global",
         overwrite: bool = False,
         group: str = "Region",
+        mhs_aggregation: str = "power_mean",
         config_file: str = "configs/config.yaml",
         acled_file: str = "configs/acled_creds.yaml",
         adm_config_file: str = "configs/adm_config.yaml"
@@ -112,6 +113,9 @@ class DatasetManager:
         logging.info("Loading conflict data...")
         self.acled = self.download_acled()
         self.acled_agg = self.download_acled(aggregate=True)
+
+        logging.info("Calculating scores...")
+        self.mhs_aggregation = mhs_aggregation
         self.data = self.combine_datasets()
 
         self.adm_config = data_utils.read_config(adm_config_file)
@@ -150,36 +154,70 @@ class DatasetManager:
         self,
         data: gpd.GeoDataFrame,
         conflict_column: str = "dfcv_conflict",
-        suffixes = ["exposure_relative"]
+        suffixes = ["exposure_relative"],
+        aggregation: str = "power_mean",
+        p: float = 0.5,
+        epsilon: float = 0.00001
     ):
         for column in data.columns:
             if "exposure" in column:
                 data[f"{column}_relative"] = data[column] / data[self.asset]
     
         for suffix in suffixes:
-            mhs, total_weight = 1, 0
-            epsilon = 0.00001
-            for hazard, weight in self.config["hazards"].items():
-                if suffix is not None:
-                    hazard = f"{hazard}_{suffix}"
+            total_weight = 0
+            for weight in self.config["hazards"].values():
+                total_weight = total_weight + weight
+
+            if self.mhs_aggregation == "power_mean":
+                mhs = 0
+                for hazard, weight in self.config["hazards"].items():
+                    if total_weight > 0:
+                        weight = weight / total_weight
+                    
+                    if suffix is not None:
+                        hazard = f"{hazard}_{suffix}"
     
-                if hazard in data.columns:
-                    mhs = mhs * ((data[hazard] + epsilon) ** (weight))
-                    total_weight += weight
+                    if hazard in data.columns:
+                        mhs = mhs + (weight * (data[hazard]) ** p)
+                
+                mhs = mhs ** (1 / p)
+                        
+            elif self.mhs_aggregation == "geometric_mean":
+                mhs = 1
+                for hazard, weight in self.config["hazards"].items():
+                    if total_weight > 0:
+                        weight = weight / total_weight
+                    
+                    if suffix is not None:
+                        hazard = f"{hazard}_{suffix}"
     
-            mhs = mhs ** (1 / (total_weight))
+                    if hazard in data.columns:
+                        mhs = mhs * ((data[hazard] + epsilon) ** weight)
+
+            elif self.mhs_aggregation == "arithmetic_mean":
+                mhs = 0
+                for hazard, weight in self.config["hazards"].items():
+                    if total_weight > 0:
+                        weight = weight / total_weight
+                    
+                    if suffix is not None:
+                        hazard = f"{hazard}_{suffix}"
+    
+                    if hazard in data.columns:
+                        mhs = mhs + ((data[hazard]) * weight)       
     
             mhs_name = "mhs"
             if suffix is not None:
                 mhs_name = f"{mhs_name}_{suffix}"
-            data[mhs_name] = mhs
+            data[mhs_name] = data_utils._minmax_scale(mhs)
     
             mhsc_name = f"mhs_{conflict_column}"
             if suffix is not None:
                 mhsc_name = f"{mhsc_name}_{suffix}"
 
             if f"{conflict_column}_{suffix}" in data.columns:
-                data[mhsc_name] = data[mhs_name] * data[f"{conflict_column}_{suffix}"]
+                conflict_scaled = data_utils._minmax_scale(data[f"{conflict_column}_{suffix}"])
+                data[mhsc_name] = data[mhs_name] * conflict_scaled
     
         return data
 
@@ -193,7 +231,7 @@ class DatasetManager:
             logging.info(f"Downloading geoboundary for {self.iso_code}...")
 
             if adm_source == 'gadm':
-                self.download_url(adm_source, dataset_name=self.adm_level, ext="geojson")
+                self.download_url(adm_source, dataset_name=f"{adm_source}_{self.adm_level}", ext="geojson")
                 geoboundary = gpd.read_file(out_file)
                 
                 rename = dict()
@@ -231,6 +269,7 @@ class DatasetManager:
                         download_path = r.json()["gjDownloadURL"]
             
                     # Download and save the GeoJSON data
+                    logging.info(f"Downloading from {download_path}...")
                     geoboundary = requests.get(download_path).json()
                     with open(intermediate_file, "w") as file:
                         geojson.dump(geoboundary, file)
