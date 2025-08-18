@@ -154,7 +154,7 @@ class DatasetManager:
         self,
         data: gpd.GeoDataFrame,
         conflict_column: str = "dfcv_conflict",
-        suffixes = ["exposure_relative"],
+        suffixes = ["exposure_relative", "intensity_weighted_exposure_relative"],
         aggregation: str = "power_mean",
         p: float = 0.5,
         epsilon: float = 0.00001
@@ -432,7 +432,7 @@ class DatasetManager:
 
         if not os.path.exists(exposure_vector):
             acled_tif = self._calculate_custom_acled_exposure(acled_file)
-            out_tif = self._calculate_exposure(acled_tif, exposure_raster, threshold=1)
+            out_tif, _ = self._calculate_exposure(acled_tif, exposure_raster, threshold=1)
             data = self._calculate_zonal_stats(
                 out_tif,
                 column=column,
@@ -548,7 +548,7 @@ class DatasetManager:
             else:
                 url = self.config["urls"][url_name].format(self.iso_code, self.iso_code.lower())
                 
-        logging.info(f"Downloading {url}...")
+            logging.info(f"Downloading {url}...")
     
         if self.global_name.lower() in dataset:
             if not os.path.exists(global_file):
@@ -663,6 +663,9 @@ class DatasetManager:
                 exposure_file = self._build_filename(
                     self.iso_code, f"{folder}_exposure", self.local_dir, ext="tif"
                 )
+                weighted_exposure_file = self._build_filename(
+                    self.iso_code, f"{folder}_intensity_weighted_exposure", self.local_dir, ext="tif"
+                )
     
                 self._generate_exposure(
                     proc_tif_file,
@@ -690,8 +693,13 @@ class DatasetManager:
                         column=folder.lower(),
                         suffix="exposure",
                     )
+                    weighted_exposure = self._calculate_zonal_stats(
+                        weighted_exposure_file,
+                        column=folder.lower(),
+                        suffix="intensity_weighted_exposure",
+                    )
                     full_data = data_utils._merge_data(
-                        [full_data, exposure], columns=self.merge_columns
+                        [full_data, exposure, weighted_exposure], columns=self.merge_columns
                     )
     
             full_data.to_file(full_data_file)
@@ -717,6 +725,9 @@ class DatasetManager:
                 exposure_file = self._build_filename(
                     self.iso_code, f"{dataset_name}_exposure", self.local_dir, ext="tif"
                 )
+                weighted_exposure_file = self._build_filename(
+                    self.iso_code, f"{dataset_name}_intensity_weighted_exposure", self.local_dir, ext="tif"
+                )
     
                 if dataset != self.asset:
                     self._generate_exposure(
@@ -741,10 +752,16 @@ class DatasetManager:
                         column=dataset_name,
                         suffix="exposure",
                     )
-                    full_data = data_utils._merge_data(
-                        [full_data, exposure], columns=self.merge_columns
+                    weighted_exposure = self._calculate_zonal_stats(
+                        weighted_exposure_file,
+                        column=dataset_name,
+                        suffix="intensity_weighted_exposure",
                     )
-    
+                    full_data = data_utils._merge_data(
+                        [full_data, exposure, weighted_exposure], columns=self.merge_columns
+                    )
+                    if len(full_data) == 0:
+                        print(dataset)
             full_data.to_file(full_data_file)
     
         full_data = gpd.read_file(full_data_file).to_crs(self.crs)
@@ -795,20 +812,32 @@ class DatasetManager:
     ) -> str:
         with rio.open(self.asset_file, "r") as src1, rio.open(hazard_file, "r") as src2:
             asset = src1.read(1)
+            asset[asset < 0] = 0
+            
             hazard = src2.read(1)
+            hazard[hazard < 0] = 0
+            
+            hazard_scaled = data_utils._minmax_scale(hazard)
     
             binary = (hazard >= threshold).astype(int)
             exposure = asset * binary
+            
+            weighted_exposure = exposure * hazard_scaled          
+            
             out_meta = src1.meta.copy()
     
-        out_file = exposure_file.replace("EXPOSURE", "BINARY")
-        with rio.open(out_file, "w", **out_meta) as dst:
+        binary_file = exposure_file.replace("EXPOSURE", "BINARY")
+        with rio.open(binary_file, "w", **out_meta) as dst:
             dst.write(binary, 1)
+
+        weighted_exposure_file = exposure_file.replace("EXPOSURE", "INTENSITY_WEIGHTED_EXPOSURE")
+        with rio.open(weighted_exposure_file, "w", **out_meta) as dst:
+            dst.write(weighted_exposure, 1)
     
         with rio.open(exposure_file, "w", **out_meta) as dst:
             dst.write(exposure, 1)
-    
-        return exposure_file
+
+        return exposure_file, weighted_exposure_file
 
 
     def _aggregate_data(
