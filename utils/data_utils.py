@@ -26,8 +26,8 @@ def _minmax_scale(data):
     Returns:
         np.ndarray or pd.Series: The scaled data.
     """
-    min_val = np.min(data)
-    max_val = np.max(data)
+    min_val = np.nanmin(data)
+    max_val = np.nanmax(data)
 
     if max_val == min_val:  # Handle cases where all values are the same
         return np.zeros_like(data, dtype=float)
@@ -79,8 +79,8 @@ def _merge_data(
     merged = full_data[0]
 
     for data in full_data[1:]:
-        if not set(data.columns) <= set(merged.columns):
-            merged = pd.merge(merged, data, on=columns, how=how)
+        #if not set(data.columns) <= set(merged.columns):
+        merged = pd.merge(merged, data, on=columns, how=how)
 
     if "geometry" in columns:
         merged = gpd.GeoDataFrame(merged, geometry="geometry")
