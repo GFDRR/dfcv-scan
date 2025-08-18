@@ -206,6 +206,9 @@ legend_titles:
     conflict_count: "Number of conflict events"
     mhs_dfcv_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
     mhs_exposure_relative: "Multi-hazard Exposure Index"
+    mhs_intensity_weighted_exposure_relative: "Intensity-weighted \nMulti-hazard Exposure Index"
+    intensity_weighted_exposure_relative: "Intensity-weighted \n{} exposure index (relative)"
+    intensity_weighted_exposure: "Intensity-weighted \n{} exposure index"
     exposure_relative: "Proportion of the population \nexposed to {} (%)"
     exposure: "Population exposed to \n{}"
     earthquake: "Peak Ground \nAcceleration (PGA)"
@@ -217,6 +220,7 @@ var_titles:
     conflict_count: "Number of conflict events"
     mhs_dfcv_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
     exposure_relative: "Relative {} Exposure"
+    exposure_weighted_relative: "Hazard Intensity-weighted Relative \n{} Exposure"
     exposure: "Absolute {} Exposure"
 
     

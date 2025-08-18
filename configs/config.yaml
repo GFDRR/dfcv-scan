@@ -2,21 +2,21 @@ hazards:
     earthquake: 1
     landslide: 1
     cyclone: 1
-    #pluvial_defended: 1
-    #fluvial_defended: 1
-    #coastal_defended: 0
-    #tsunami_rp100: 0
+    pluvial_defended: 1
+    fluvial_defended: 1
+    coastal_defended: 1
+    #tsunami_rp100: 1
     #extreme_heat_rp100: 1
-    #wildfire_rp10: 0
+    #wildfire_rp10: 1
 
 datasets: 
     - 'worldpop'
     - 'global_earthquake'
     - 'global_landslide'
     - 'global_cyclone'
+    #- 'global_wildfire_rp10'
     #- 'global_tsunami_rp100'
     #- 'global_extreme_heat_rp100'
-    #- 'global_wildfire_rp10'
 
 threshold:
     global_earthquake: 0.18
