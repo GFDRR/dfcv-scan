@@ -59,19 +59,18 @@ class GeoPlot:
         var_title: str = None, 
         adm_level: str = "ADM3",
         config: dict = None,
-        precision: int = 4
-    ):
-        data = self.data.copy()
+        precision: int = 4,
         config_key = "folium"
+    ):
         self.refresh_config()
         if config is not None:
             self.update_config(key=config_key, config=config)
-            
         config = self.map_config[config_key]
 
         if var_title is None:
             var_title = self._get_title(var, "var_titles").title()
-    
+
+        data = self.data.copy()
         original_crs = data.crs
         centroid = data.dissolve("iso_code").to_crs(config["meter_crs"]).centroid
         transformer = pyproj.Transformer.from_crs(
@@ -124,18 +123,22 @@ class GeoPlot:
         legend_title: str = None,
         annotation: str = None,
         data_dir = "./data/",
-        config: dict = None
-    ):
-        data = self.dm.data.copy()
+        config: dict = None,
         config_key = "raster"
+    ):
         self.refresh_config()
         if config is not None:
             self.update_config(key=config_key, config=config)
-            
-        iso_code = data.iso_code.values[0]
         config = self.map_config[config_key]
+
+        data = self.dm.data.copy()
+        iso_code = data.iso_code.values[0]
+        
         raster_file = os.path.join(data_dir, f"{iso_code}/{iso_code}_{raster_name.upper()}.tif")
-        fig, ax = plt.subplots(figsize=(config['figsize_x'], config['figsize_y']),  dpi=config['dpi'])
+        fig, ax = plt.subplots(
+            figsize=(config['figsize_x'], config['figsize_y']),  
+            dpi=config['dpi']
+        )
         
         with rio.open(raster_file) as src:
             out_image = src.read(1)
@@ -205,9 +208,9 @@ class GeoPlot:
         legend_title: str = None,
         annotation: str = None,
         group: str = 'group',
-        config: dict = None
-    ):
+        config: dict = None,
         config_key = "geoboundaries"
+    ):
         self.refresh_config()
         if config is not None:
             self.update_config(key=config_key, config=config)
@@ -286,10 +289,10 @@ class GeoPlot:
             annotation = self._get_annotation()
         else:
             annotation = self._get_annotation() + f"{annotation}\n"
-        
             
         self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
         ax.axis("off")
+        return ax
 
 
     def _plot_missing(self, ax, data_missing: gpd.GeoDataFrame, config: dict):
@@ -496,6 +499,7 @@ class GeoPlot:
         if title is None:
             title = config['title'].format(var1_title, var2_title, country)
         self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
+        return ax
                 
 
     def plot_choropleth(
@@ -742,6 +746,7 @@ class GeoPlot:
             title = config['title'].format(var_title, country)
         self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
         ax.axis("off")
+        return ax
 
 
     def _plot_tiny_map(self, zoom_to, country, subunit, data, dissolved, fig, ax, ax2, config, x):
