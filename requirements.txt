@@ -1,5 +1,4 @@
 ahpy==2.0
-contextily==1.6.2
 folium==0.19.5
 GDAL==3.6.2
 geojson==3.2.0

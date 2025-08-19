@@ -5,7 +5,6 @@ import matplotlib.ticker as mticker
 import matplotlib.patches as mpatches
 
 import copy
-import contextily as ctx
 import rasterio as rio
 import geopandas as gpd
 import pandas as pd
