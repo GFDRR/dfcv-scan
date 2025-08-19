@@ -220,7 +220,7 @@ var_titles:
     conflict_count: "Number of conflict events"
     mhs_dfcv_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
     exposure_relative: "Relative {} Exposure"
-    exposure_weighted_relative: "Hazard Intensity-weighted Relative \n{} Exposure"
+    intensity_weighted_exposure_relative: "Hazard Intensity-weighted Relative \n{} Exposure"
     exposure: "Absolute {} Exposure"
 
     
@@ -233,5 +233,5 @@ annotations:
     landslide: "Global Landslide Hazard Map, The World Bank (2021)"
     worldpop: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
     exposure: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
-    conflict: "Conflict Data from Armed Conflict Location & Event Data Project (ACLED)"
+    conflict: "Conflict data from Armed Conflict Location & Event Data Project (ACLED)"
     
