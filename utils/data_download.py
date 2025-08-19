@@ -178,7 +178,7 @@ class DatasetManager:
     def calculate_multihazard_score(
         self,
         data: gpd.GeoDataFrame,
-        conflict_column: str = "dfcv_conflict",
+        conflict_column: str = "wbg_conflict",
         suffixes = ["exposure_relative", "intensity_weighted_exposure_relative"],
         aggregation: str = "power_mean",
         p: float = 0.5,
@@ -447,7 +447,7 @@ class DatasetManager:
         agg_file: str,
         exposure_raster: str,
         exposure_vector: str,
-        prefix: str = "dfcv",
+        prefix: str = "wbg",
         column: str = "conflict_exposure"
     ):
         acled = gpd.read_file(acled_file)
