@@ -19,6 +19,9 @@ import rasterio as rio
 import rasterstats
 import pycountry
 
+import itertools
+import ahpy
+
 from utils import data_utils
 
 logging.basicConfig(level=logging.INFO, force=True)
@@ -116,11 +119,35 @@ class DatasetManager:
 
         logging.info("Calculating scores...")
         self.mhs_aggregation = mhs_aggregation
+        
         self.data = self.combine_datasets()
+        self.data = self.calculate_multihazard_score(self.data)
 
         self.adm_config = data_utils.read_config(adm_config_file)
         self.data = self.assign_grouping()
 
+
+    def calculate_ahp(self):
+        hazards = self.config["hazards"].keys()
+        combinations = list(itertools.combinations(hazards, 2))
+        
+        weight_dict = dict()
+        for combination in combinations:
+            weight = input(f"How much more important is {str(combination[0])} compared to {str(combination[1])}: ")
+            weight_dict[combination] = weight
+        
+        hazard_weights = ahpy.Compare(name='Hazards', comparisons=weight_dict, precision=5, random_index='saaty')
+        cr = hazard_weights.consistency_ratio
+        logging.info(f"Consistency_ratio: {cr}")
+
+        if cr < 0.10:
+            self.config["hazards"] = hazard_weights.target_weights
+            logging.info(self.config["hazards"])
+            self.data = self.calculate_multihazard_score(self.data)
+            return self.data
+        else:
+            raise ValueError(f'Consistency ratio {cr} > 0.10. Please try again.')
+                     
 
     def assign_grouping(self):
         if self.iso_code in self.adm_config:
@@ -145,8 +172,6 @@ class DatasetManager:
                 data.append(self.acled_agg)
 
         data = data_utils._merge_data(data, columns=self.merge_columns)    
-        data = self.calculate_multihazard_score(data)
-    
         return data
 
 
@@ -160,13 +185,13 @@ class DatasetManager:
         epsilon: float = 0.00001
     ):
         for column in data.columns:
-            if "exposure" in column:
-                data[f"{column}_relative"] = data[column] / data[self.asset]
+            if "relative" not in column:
+                colname = f"{column}_relative"
+                if "exposure" in column and colname not in data.columns:
+                    data[colname] = data[column] / data[self.asset]
     
         for suffix in suffixes:
-            total_weight = 0
-            for weight in self.config["hazards"].values():
-                total_weight = total_weight + weight
+            total_weight = sum(list(self.config["hazards"].values()))
 
             if self.mhs_aggregation == "power_mean":
                 mhs = 0
@@ -760,8 +785,6 @@ class DatasetManager:
                     full_data = data_utils._merge_data(
                         [full_data, exposure, weighted_exposure], columns=self.merge_columns
                     )
-                    if len(full_data) == 0:
-                        print(dataset)
             full_data.to_file(full_data_file)
     
         full_data = gpd.read_file(full_data_file).to_crs(self.crs)
