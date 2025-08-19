@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools >= 77.0.3"]
+requires = ["setuptools >= 80.9.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dfcv_colocation_mapping"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
   { name="Isabelle Tingzon", email="issatingzon@gmail.com" },
 ]
@@ -17,7 +17,11 @@ classifiers = [
 ]
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
-Homepage = "https://github.com/pypa/dfcv_colocation_mapping"
-Issues = "https://github.com/pypa/dfcv_colocation_mapping/issues"
+Homepage = "https://github.com/GFDRR/disaster-fcv-colocation-mapping"
+Issues = "https://github.com/GFDRR/disaster-fcv-colocation-mapping/issues"
