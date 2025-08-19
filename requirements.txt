@@ -1,11 +1,13 @@
+ahpy==2.0
 contextily==1.6.2
 folium==0.19.5
 GDAL==3.6.2
 geojson==3.2.0
 geojson_rewind==1.1.0
 geopandas==1.0.1
-matplotlib==3.10.3
-numpy==2.3.1
+humanize==4.12.3
+matplotlib==3.10.5
+numpy==2.3.2
 pandas==2.3.1
 pycountry==24.6.1
 pyfonts==1.1.1
@@ -15,4 +17,6 @@ PyYAML==6.0.2
 PyYAML==6.0.2
 rasterio==1.4.3
 rasterstats==0.20.0
-Requests==2.32.4
+Requests==2.32.5
+seaborn==0.13.2
+Shapely==2.1.1
