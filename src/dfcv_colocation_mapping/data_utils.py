@@ -34,12 +34,28 @@ def _get_text_height(fig: plt.Figure, s: str, fontsize: float) -> float:
         TypeError: If `fig` is not a Matplotlib Figure, `s` is not a string,
                    or `fontsize` is not a number.
     """
-    
+
+    # Input validation
+    if not isinstance(fig, plt.Figure):
+        raise TypeError(f"`fig` must be a matplotlib.figure.Figure, got {type(fig).__name__}")
+    if not isinstance(s, str):
+        raise TypeError(f"`s` must be a string, got {type(s).__name__}")
+    if not isinstance(fontsize, (int, float)):
+        raise TypeError(f"`fontsize` must be a number, got {type(fontsize).__name__}")
+
+    # Get the renderer for the figure
     renderer = fig.canvas.get_renderer()
+
+    # Create a temporary text object at (0, 0) to measure its size
     t = plt.text(0, 0, s, fontsize=fontsize)
+
+    # Get bounding box
     bb = t.get_window_extent(renderer=renderer)
+
+    # Remove the temporary text
     t.remove()
-    
+
+    # Return text height relative to figure height
     return bb.height / fig.bbox.height
 
 
