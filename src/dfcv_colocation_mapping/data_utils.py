@@ -11,9 +11,22 @@ import rasterio.mask
 import subprocess
 import humanize
 
+import textwrap
+import matplotlib.pyplot as plt
+
 from shapely.geometry import Polygon, MultiPolygon
 
 logging.basicConfig(level=logging.INFO)
+
+
+def _get_text_height(fig, s, fontsize):
+    """Return text height in figure coords based on fontsize."""
+    renderer = fig.canvas.get_renderer()
+    t = plt.text(0, 0, s, fontsize=fontsize)
+    bb = t.get_window_extent(renderer=renderer)
+    t.remove()
+    
+    return bb.height / fig.bbox.height
 
 
 def _minmax_scale(data):
