@@ -168,8 +168,8 @@ raster:
     title: "{} in {}"
     cmap: "YlGnBu"
 
-    cbar_width: "4%"
-    cbar_height: "25%"
+    cbar_width: "3%"
+    cbar_height: "50%"
     cbar_loc: 'center left'
     cbar_bbox_x: -0.35
     cbar_bbox_y: 0
