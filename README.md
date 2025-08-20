@@ -9,7 +9,7 @@ Mapping Multi-hazard and Conflict Co-location in Fragile, Conflict, and Violence
 <details>
   <summary>Table of Contents</summary>
   <ol>
-    <li><a href="#Description">Description</a></li>
+    <li><a href="#about-the-project">About the Project</a></li>
     <li><a href="#getting-started">Getting Started</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
@@ -18,8 +18,8 @@ Mapping Multi-hazard and Conflict Co-location in Fragile, Conflict, and Violence
   </ol>
 </details>
 
-<!-- DESCRIPTION -->
-## Description
+<!-- ABOUT THE PROJECT -->
+## About the Project
 
 Disasters and conflicts are often interconnected and mutually reinforcing in ways that exacerbate vulnerability. Disasters can intensify pre-existing social tensions, trigger surges in violence, and increase vulnerability to exploitation by armed groups. Conversely, countries facing Fragility, Conflict, and Violence (FCV) challenges are typically more vulnerable to disasters. This highlights the need for DRM approaches that jointly account for both multi-hazard and conflict exposure. 
 
@@ -58,7 +58,7 @@ from dfcv_colocation_mapping import map_utils
 
 dm = data_download.DatasetManager(
     iso_code="RWA", 
-    adm_level="ADM3,
+    adm_level="ADM3",
     acled_key=<INSERT ACLED KEY HERE>,
     acled_email=<INSERT ACLED EMAIL HERE>,
 )
