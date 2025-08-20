@@ -40,10 +40,12 @@ class GeoPlot:
     def __init__(
         self, 
         dm,
+        data_dir: str = "./data/",
         map_config_file: str = None
     ):
         self.dm = dm
         self.data = dm.data  
+        self.data_dir = data_dir
         if map_config_file is None:
             map_config_file = _map_config_file
         self.map_config_file = map_config_file
@@ -128,7 +130,6 @@ class GeoPlot:
         subtitle: str = None, 
         legend_title: str = None,
         annotation: str = None,
-        data_dir = "./data/",
         config: dict = None,
         config_key = "raster"
     ):
@@ -140,7 +141,7 @@ class GeoPlot:
         data = self.dm.data.copy()
         iso_code = data.iso_code.values[0]
         
-        raster_file = os.path.join(data_dir, f"{iso_code}/{iso_code}_{raster_name.upper()}.tif")
+        raster_file = os.path.join(self.data_dir, f"{iso_code}/{iso_code}_{raster_name.upper()}.tif")
         fig, ax = plt.subplots(
             figsize=(config['figsize_x'], config['figsize_y']),  
             dpi=config['dpi']
@@ -166,10 +167,11 @@ class GeoPlot:
             config["cbar_bbox_width"],
             config["cbar_bbox_height"]
         ]
+
         axins = inset_axes(
             ax, 
             width=config["cbar_width"], 
-            height=config["cbar_height"], 
+            height=config["cbar_height"],
             loc=config["cbar_loc"],
             bbox_to_anchor=bbox_anchor,
             bbox_transform=ax.transAxes, 
@@ -857,6 +859,11 @@ class GeoPlot:
                 
             if 'annotation_y' in config:
                 annotation_y = config['annotation_y']
+
+            text_height = data_utils._get_text_height(
+                fig, annotation, config['annotation_fontsize']
+            )
+            annotation_y = y0 - text_height - 0.01
             
             fig.text(
                 x=annotation_x, 
