@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dfcv_colocation_mapping"
-version = "0.0.5"
+version = "0.2.2"
 authors = [
-  { name="Isabelle Tingzon", email="issatingzon@gmail.com" },
+  { name="Isabelle Tingzon"},
 ]
 description = "A package for mapping multi-hazard and conflict co-location in FCV countries."
 readme = "README.md"
@@ -17,10 +17,38 @@ classifiers = [
 ]
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
-dynamic = ["dependencies"]
+dependencies = [
+    "ahpy == 2.0",
+    "folium == 0.19.5",
+    "GDAL == 3.6.2",
+    "geojson == 3.2.0",
+    "geojson_rewind == 1.1.0",
+    "geopandas == 1.0.1",
+    "humanize == 4.12.3",
+    "matplotlib == 3.10.1",
+    "numpy == 1.26.4",
+    "pandas == 2.2.3",
+    "pycountry == 24.6.1",
+    "pyfonts == 1.1.1",
+    "pypalettes == 0.1.6",
+    "pyproj == 3.7.1",
+    "PyYAML == 6.0.2",
+    "rasterio == 1.4.3",
+    "rasterstats == 0.20.0",
+    "requests == 2.32.3",
+    "seaborn == 0.13.2",
+    "shapely == 2.0.7",
+    "importlib_resources == 6.5.2"
+]
 
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dfcv_colocation_mapping = ["configs/*.yaml"]
 
 [project.urls]
 Homepage = "https://github.com/GFDRR/disaster-fcv-colocation-mapping"
