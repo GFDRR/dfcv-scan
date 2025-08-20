@@ -23,8 +23,13 @@ import pycountry
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import ListedColormap
 from rasterio.plot import show
-from src.dfcv_colocation_mapping import data_utils
+from dfcv_colocation_mapping import data_utils
 import rasterio.mask
+
+import importlib_resources
+
+resources = importlib_resources.files("dfcv_colocation_mapping")
+_map_config_file = resources.joinpath("configs", "map_config.yaml")
 
 
 regular = pyfonts.load_google_font("Roboto")
@@ -35,10 +40,12 @@ class GeoPlot:
     def __init__(
         self, 
         dm,
-        map_config_file: str = "configs/map_config.yaml"
+        map_config_file: str = None
     ):
         self.dm = dm
         self.data = dm.data  
+        if map_config_file is None:
+            map_config_file = _map_config_file
         self.map_config_file = map_config_file
         self.refresh_config()
 

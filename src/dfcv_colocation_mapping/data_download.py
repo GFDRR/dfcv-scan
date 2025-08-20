@@ -22,9 +22,15 @@ import pycountry
 import itertools
 import ahpy
 
-from src.dfcv_colocation_mapping import data_utils
+import importlib_resources
+from dfcv_colocation_mapping import data_utils
 
 logging.basicConfig(level=logging.INFO, force=True)
+
+resources = importlib_resources.files("dfcv_colocation_mapping")
+_config_file = resources.joinpath("configs", "config.yaml")
+_acled_file = resources.joinpath("configs", "acled_creds.yaml")
+_adm_config_file = resources.joinpath("configs", "adm_config.yaml")
 
 
 class DatasetManager:
@@ -54,9 +60,9 @@ class DatasetManager:
         overwrite: bool = False,
         group: str = "Region",
         mhs_aggregation: str = "power_mean",
-        config_file: str = "configs/config.yaml",
-        acled_file: str = "configs/acled_creds.yaml",
-        adm_config_file: str = "configs/adm_config.yaml"
+        config_file: str = None,
+        acled_file: str = None,
+        adm_config_file: str = None
     ):
         self.iso_code = iso_code
         self.adm_level = adm_level
@@ -79,6 +85,14 @@ class DatasetManager:
         self.fathom_year = fathom_year
         self.fathom_rp = fathom_rp
         self.fathom_threshold = fathom_threshold
+
+        if config_file is None:
+            config_file = _config_file
+        if acled_file is None:
+            acled_file = _acled_file
+        if adm_config_file is None:
+            adm_config_file = _adm_config_file
+            
         self.config = data_utils.read_config(config_file)
 
         if os.path.exists(acled_file):
