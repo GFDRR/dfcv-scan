@@ -13,7 +13,6 @@ import humanize
 
 import textwrap
 import matplotlib.pyplot as plt
-
 from shapely.geometry import Polygon, MultiPolygon
 
 logging.basicConfig(level=logging.INFO)
