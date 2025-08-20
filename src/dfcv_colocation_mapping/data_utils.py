@@ -18,8 +18,23 @@ from shapely.geometry import Polygon, MultiPolygon
 logging.basicConfig(level=logging.INFO)
 
 
-def _get_text_height(fig, s, fontsize):
-    """Return text height in figure coords based on fontsize."""
+def _get_text_height(fig: plt.Figure, s: str, fontsize: float) -> float:
+    """
+    Computes the relative height of a text string within a Matplotlib figure.
+
+    Args:
+        fig (plt.Figure): The Matplotlib figure object.
+        s (str): The text string to measure.
+        fontsize (float): The font size of the text.
+
+    Returns:
+        float: The height of the text relative to the figure's height (0-1 scale).
+
+    Raises:
+        TypeError: If `fig` is not a Matplotlib Figure, `s` is not a string,
+                   or `fontsize` is not a number.
+    """
+    
     renderer = fig.canvas.get_renderer()
     t = plt.text(0, 0, s, fontsize=fontsize)
     bb = t.get_window_extent(renderer=renderer)
@@ -28,72 +43,170 @@ def _get_text_height(fig, s, fontsize):
     return bb.height / fig.bbox.height
 
 
-def _minmax_scale(data):
+def _minmax_scale(data: pd.Series) -> pd.Series:
     """
-    Performs Min-Max scaling on a NumPy array or Pandas Series.
+    Performs Min-Max scaling on a NumPy array or Pandas Series, scaling values to [0, 1].
 
     Args:
         data (np.ndarray or pd.Series): The input data to be scaled.
 
     Returns:
-        np.ndarray or pd.Series: The scaled data.
+        np.ndarray or pd.Series: The scaled data with values between 0 and 1.
+
+    Raises:
+        TypeError: If `data` is not a NumPy array or Pandas Series.
+        ValueError: If `data` is empty.
     """
+    
+    # Ensure input is a valid type
+    if not isinstance(data, (np.ndarray, pd.Series)):
+        raise TypeError(f"Input must be np.ndarray or pd.Series, got {type(data).__name__}")
+
+    # Ensure data is not empty
+    if len(data) == 0:
+        raise ValueError("Input data is empty. Cannot perform scaling.")
+
+    # Compute min and max, ignoring NaNs
     min_val = np.nanmin(data)
     max_val = np.nanmax(data)
 
-    if max_val == min_val:  # Handle cases where all values are the same
+    # Handle case where all values are identical
+    if max_val == min_val:  
         return np.zeros_like(data, dtype=float)
-    
+
+    # Perform Min-Max scaling
     scaled_data = (data - min_val) / (max_val - min_val)
+    
     return scaled_data
 
 
-def _humanize(value, number=None):
+def _humanize(value, number=None) -> str:
+    """
+    Converts a numeric value into a human-readable string with compact formatting.
+
+    Args:
+        value (float | int): The numeric value to format.
+        number (optional): Placeholder for future use. Currently unused.
+
+    Returns:
+        str: Human-readable string representation of the number.
+
+    Raises:
+        TypeError: If `value` is not a number (int or float).
+    """
+    
+    # Ensure input is numeric
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"Value must be int or float, got {type(value).__name__}")
+
+    # Negative values are represented as "0"
     if value < 0:
         return "0"
 
-    # Large numbers: format with K/M using humanize.intword
+    # Large numbers (10 and above)
     if value >= 10:
-        formatter = "%.1f"
-        if value > 100000:
-            formatter = "%.0f"
-    
+        # Choose formatter
+        if value >= 1_000_000:
+            formatter = "%.1f"  # e.g., 1.2M
+        elif value >= 100_000:
+            formatter = "%.0f"  # e.g., 120K
+        else:
+            formatter = "%.1f"  # e.g., 12.3K
+
         text = humanize.intword(value, formatter)
         text = text.replace(" thousand", "K").replace(" million", "M")
-
-        # Remove trailing .0 if present (e.g., "1.0K" → "1K")
-        if text.endswith(".0K") or text.endswith(".0M"):
-            text = text.replace(".0", "")
+        
+        # Remove trailing .0 for K
+        text = text.replace(".0K", "K")
+        
         return text
 
-    # Smaller numbers: format directly
-    if value.is_integer():
-        return f"{int(value)}"
-    elif value < 1:
-        return f"{value:.3f}"
+    # Small numbers (<10)
+    if value < 1:
+        return f"{value:.2f}"  # e.g., 0.12
+    elif value.is_integer():
+        return f"{int(value)}"  # e.g., 5
     else:
-        return f"{value:.1f}"
+        return f"{value:.1f}"  # e.g., 5.2
 
 
-def _fill_holes(geometry):
+def _fill_holes(geometry) -> object:
+    """
+    Removes interior holes from Polygon or MultiPolygon geometries.
+
+    Args:
+        geometry (Polygon | MultiPolygon | object): 
+            The input geometry to process. 
+            - If Polygon, returns a new Polygon with only the exterior ring.  
+            - If MultiPolygon, returns a MultiPolygon with holes removed from each Polygon.  
+            - Other geometry types are returned unchanged.
+
+    Returns:
+        object: Geometry with holes removed if Polygon/MultiPolygon, 
+                otherwise returns the input geometry unchanged.
+
+    Raises:
+        ValueError: If the input geometry is invalid (e.g., None or empty).
+    """
+
+    # Ensure input geometry is valid
+    if geometry is None or geometry.is_empty:
+        raise ValueError("Invalid geometry: input is None or empty.")
+
+    # If Polygon, reconstruct using only its exterior (removes holes)
     if isinstance(geometry, Polygon):
-        # Create a new Polygon from its exterior ring, effectively removing holes
         return Polygon(geometry.exterior)
+
+    # If MultiPolygon, apply hole removal to each sub-polygon
     elif isinstance(geometry, MultiPolygon):
-        # Apply to each polygon within the MultiPolygon
         return MultiPolygon([Polygon(p.exterior) for p in geometry.geoms])
-    return geometry # Return other geometry types as is    
+
+    # Return other geometry types as is (e.g., LineString, Point, etc.)
+    return geometry 
 
 
 def _merge_data(
-    full_data: gpd.GeoDataFrame, columns: list = [], how: str = "inner"
+    full_data: gpd.GeoDataFrame, 
+    columns: list = [], 
+    how: str = "inner"
 ) -> gpd.GeoDataFrame:
+    """
+    Merges multiple GeoDataFrames or DataFrames into a single GeoDataFrame.
+
+    Args:
+        full_data (list): 
+            List of GeoDataFrames or DataFrames to merge. 
+            The first element is used as the base, and others are merged sequentially.
+        columns (list, optional): 
+            List of column names to merge on. Defaults to [].
+        how (str, optional): 
+            Type of merge to perform. Defaults to "inner".
+            Options: {"left", "right", "outer", "inner"}.
+
+    Returns:
+        gpd.GeoDataFrame: The merged GeoDataFrame.
+
+    Raises:
+        ValueError: If `full_data` is empty or not a list of DataFrames/GeoDataFrames.
+        KeyError: If merge columns are missing in one of the DataFrames.
+    """
+    
+    # Ensure we have at least one dataset to merge
+    if not full_data or not isinstance(full_data, list):
+        raise ValueError("`full_data` must be a non-empty list of DataFrames or GeoDataFrames.")
+
+    # Use the first dataset as the base
     merged = full_data[0]
 
+    # Iteratively merge the remaining datasets
     for data in full_data[1:]:
-        #if not set(data.columns) <= set(merged.columns):
+        # Check if all merge columns exist in both datasets
+        if not set(columns).issubset(data.columns) or not set(columns).issubset(merged.columns):
+            raise KeyError(f"Merge columns {columns} not found in one of the DataFrames.")
+        
         merged = pd.merge(merged, data, on=columns, how=how)
 
+    # Ensure result is a GeoDataFrame if geometry column is preserved
     if "geometry" in columns:
         merged = gpd.GeoDataFrame(merged, geometry="geometry")
 
@@ -101,8 +214,35 @@ def _merge_data(
 
 
 def _clip_raster(
-    global_tif: str, local_tif: str, admin: gpd.GeoDataFrame, nodata: list = []
+    global_tif: str, 
+    local_tif: str, 
+    admin: gpd.GeoDataFrame, 
+    nodata: list = []
 ) -> rio.io.DatasetReader:
+    """
+    Clips a global raster to the boundary of a given admin unit and saves it locally.
+
+    Args:
+        global_tif (str): Path to the global raster file (GeoTIFF).
+        local_tif (str): Path to save the clipped raster file.
+        admin (gpd.GeoDataFrame): GeoDataFrame containing the admin boundary geometry.
+        nodata (list, optional): List of nodata values to mask. Defaults to [].
+
+    Returns:
+        rasterio.io.DatasetReader: The clipped raster dataset.
+
+    Raises:
+        FileNotFoundError: If the global raster file does not exist.
+        ValueError: If `admin` GeoDataFrame is empty or invalid.
+    """
+
+    # Ensure the input raster exists
+    if not os.path.exists(global_tif):
+        raise FileNotFoundError(f"Global raster not found: {global_tif}")
+
+    # Ensure the GeoDataFrame contains at least one geometry
+    if admin.empty:
+        raise ValueError("Admin GeoDataFrame is empty. Cannot perform clipping.")
 
     # Return existing raster if the clipped file already exists
     if not os.path.exists(local_tif):
@@ -144,7 +284,32 @@ def _clip_raster(
     return rio.open(local_tif)
 
 
-def read_config(config_file: str):
-    with open(config_file, "r") as file:
-        config = yaml.safe_load(file)
+def read_config(config_file: str) -> dict:
+    """
+    Reads a YAML configuration file and returns its contents as a dictionary.
+
+    Args:
+        config_file (str): Path to the YAML configuration file.
+
+    Returns:
+        dict: Parsed configuration data as a dictionary.
+
+    Raises:
+        FileNotFoundError: If the configuration file does not exist.
+        yaml.YAMLError: If the YAML file contains invalid syntax or cannot be parsed.
+    """
+
+    # Check if the file exists before trying to open
+    if not os.path.exists(config_file):
+        raise FileNotFoundError(f"Config file not found: {config_file}")
+
+    try:
+        # Open the YAML configuration file in read mode
+        with open(config_file, "r") as file:
+            # Parse the YAML content into a Python dictionary
+            config = yaml.safe_load(file)
+    except yaml.YAMLError as e:
+        # Raise error if the YAML is invalid
+        raise yaml.YAMLError(f"Error parsing YAML file: {e}")
+        
     return config
