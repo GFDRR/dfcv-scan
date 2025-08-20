@@ -264,7 +264,14 @@ class DatasetManager:
     def download_geoboundary(self, adm_source: str) -> gpd.GeoDataFrame:
         out_file = self._build_filename(
             self.iso_code, f"{adm_source}_{self.adm_level}", self.local_dir, ext="geojson"
-        )
+        )    
+
+        gadm_file = self._build_filename(
+            self.iso_code, f"gadm_{self.adm_level}", self.local_dir, ext="geojson"
+        ) 
+        if os.path.exists(gadm_file):
+            adm_source = "gadm"
+            out_file = gadm_file
 
         if self.overwrite or not os.path.exists(out_file):
             logging.info(f"Downloading geoboundary for {self.iso_code}...")
