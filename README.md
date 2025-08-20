@@ -44,7 +44,7 @@ To install OGR/GDAL, follow [these instructions](https://ljvmiranda921.github.io
 
 
 ### Demo Notebook
-<a target="_blank" href="https://colab.research.google.com/github/GFDRR/disaster-fcv-colocation-mapping/blob/master/notebooks/demo2.ipynb">
+<a target="_blank" href="https://colab.research.google.com/github/GFDRR/disaster-fcv-colocation-mapping/blob/master/examples/demo2.ipynb">
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
 
