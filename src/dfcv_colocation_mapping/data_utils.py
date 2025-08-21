@@ -18,47 +18,6 @@ from shapely.geometry import Polygon, MultiPolygon
 logging.basicConfig(level=logging.INFO)
 
 
-def _get_text_height(fig: plt.Figure, s: str, fontsize: float) -> float:
-    """
-    Computes the relative height of a text string within a Matplotlib figure.
-
-    Args:
-        fig (plt.Figure): The Matplotlib figure object.
-        s (str): The text string to measure.
-        fontsize (float): The font size of the text.
-
-    Returns:
-        float: The height of the text relative to the figure's height (0-1 scale).
-
-    Raises:
-        TypeError: If `fig` is not a Matplotlib Figure, `s` is not a string,
-                   or `fontsize` is not a number.
-    """
-
-    # Input validation
-    if not isinstance(fig, plt.Figure):
-        raise TypeError(f"`fig` must be a matplotlib.figure.Figure, got {type(fig).__name__}")
-    if not isinstance(s, str):
-        raise TypeError(f"`s` must be a string, got {type(s).__name__}")
-    if not isinstance(fontsize, (int, float)):
-        raise TypeError(f"`fontsize` must be a number, got {type(fontsize).__name__}")
-
-    # Get the renderer for the figure
-    renderer = fig.canvas.get_renderer()
-
-    # Create a temporary text object at (0, 0) to measure its size
-    t = plt.text(0, 0, s, fontsize=fontsize)
-
-    # Get bounding box
-    bb = t.get_window_extent(renderer=renderer)
-
-    # Remove the temporary text
-    t.remove()
-
-    # Return text height relative to figure height
-    return bb.height / fig.bbox.height
-
-
 def _minmax_scale(data: pd.Series) -> pd.Series:
     """
     Performs Min-Max scaling on a NumPy array or Pandas Series, scaling values to [0, 1].
