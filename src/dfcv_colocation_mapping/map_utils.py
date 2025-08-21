@@ -1,4 +1,6 @@
 import os
+import importlib_resources
+
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.ticker as mticker
@@ -23,13 +25,8 @@ import pycountry
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import ListedColormap
 from rasterio.plot import show
-from dfcv_colocation_mapping import data_utils
+from src.dfcv_colocation_mapping import data_utils
 import rasterio.mask
-
-import importlib_resources
-
-resources = importlib_resources.files("dfcv_colocation_mapping")
-_map_config_file = resources.joinpath("configs", "map_config.yaml")
 
 
 regular = pyfonts.load_google_font("Roboto")
@@ -43,21 +40,76 @@ class GeoPlot:
         data_dir: str = "./data/",
         map_config_file: str = None
     ):
+        """
+        Initializes a GeoPlot instance.
+
+        Args:
+            dm: Data manager object that contains the dataset (`dm.data`).
+            data_dir (str, optional): Path to the data directory. Defaults to "./data/".
+            map_config_file (str, optional): Path to a YAML map configuration file. 
+                If None, the default config in the package is used.
+
+        Raises:
+            FileNotFoundError: If the map configuration file does not exist.
+        """
+        
         self.dm = dm
-        self.data = dm.data  
+        self.data = dm.data  # Store the dataset from the data manager
         self.data_dir = data_dir
+
+        # Load package resources
+        resources = importlib_resources.files("dfcv_colocation_mapping")
+
+        # Use default map config if none provided
         if map_config_file is None:
-            map_config_file = _map_config_file
+            map_config_file = resources.joinpath("configs", "map_config.yaml")
+            
         self.map_config_file = map_config_file
+
+        # Load or refresh configuration from the YAML file
         self.refresh_config()
 
     
-    def refresh_config(self):
+    def refresh_config(self) -> dict:
+        """
+        Loads or reloads the map configuration from the YAML file.
+    
+        Returns:
+            dict: The parsed map configuration.
+    
+        Raises:
+            FileNotFoundError: If the map configuration file does not exist.
+            yaml.YAMLError: If the YAML file contains invalid syntax.
+        """
+
+        # Read the configuration using the utility function
         self.map_config = data_utils.read_config(self.map_config_file)
+
+        # Return the loaded configuration
         return self.map_config
         
 
-    def update_config(self, key: str, config: dict):
+    def update_config(self, key: str, config: dict) -> None:
+        """
+        Updates a specific section of the map configuration with new values.
+    
+        Args:
+            key (str): The key in the map configuration dictionary to update.
+            config (dict): A dictionary of values to merge into the existing configuration.
+    
+        Raises:
+            KeyError: If the specified key does not exist in the current map configuration.
+            TypeError: If `config` is not a dictionary.
+        """
+        # Ensure the new config is a dictionary
+        if not isinstance(config, dict):
+            raise TypeError(f"`config` must be a dictionary, got {type(config).__name__}")
+    
+        # Ensure the key exists in the current map configuration
+        if key not in self.map_config:
+            raise KeyError(f"Key '{key}' not found in map configuration")
+
+        # Update the configuration for the specified key
         self.map_config[key].update(config)
 
 
@@ -216,6 +268,7 @@ class GeoPlot:
         legend_title: str = None,
         annotation: str = None,
         group: str = 'group',
+        max_units: int = 50,
         config: dict = None,
         config_key = "geoboundaries"
     ):
@@ -272,19 +325,21 @@ class GeoPlot:
             edgecolor = config["edgecolor_no_group"]
         
         data_adm.plot(ax=ax, facecolor="none", edgecolor=edgecolor, lw=linewidth)
-        data_adm.apply(lambda x: ax.annotate(
-            text=x[adm_level].replace("(", "\n("), 
-            xy=x.geometry.centroid.coords[0], 
-            ha='center', 
-            fontsize=config["fontsize"],
-            bbox=dict(
-                facecolor=config["label_facecolor"], 
-                edgecolor=config["label_edgecolor"], 
-                lw=config["label_linewidth"], 
-                alpha=config["label_alpha"], 
-                boxstyle=config["label_boxstyle"]
-            )
-        ), axis=1);
+
+        if len(data_adm) < max_units:
+            data_adm.apply(lambda x: ax.annotate(
+                text=x[adm_level].replace("(", "\n("), 
+                xy=x.geometry.centroid.coords[0], 
+                ha='center', 
+                fontsize=config["fontsize"],
+                bbox=dict(
+                    facecolor=config["label_facecolor"], 
+                    edgecolor=config["label_edgecolor"], 
+                    lw=config["label_linewidth"], 
+                    alpha=config["label_alpha"], 
+                    boxstyle=config["label_boxstyle"]
+                )
+            ), axis=1);
         dissolved = data.dissolve("iso_code")
         dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
         dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
@@ -583,8 +638,55 @@ class GeoPlot:
         fig.canvas.draw()
         pos = ax.get_position()
         legend_left = None
-        
-        if config['legend_type'] == 'colorbar':
+
+        if data[var].nunique() == 1:
+            # Plot all geometries in the same color
+            unique_value = data[var].dropna().unique()[0]
+            value = unique_value / 100
+
+            if value >= 0 and value <= 1:
+                color = cmap(value)
+            else:
+                color = cmap(0.5)
+                
+            data.plot(
+                ax=ax,
+                color=color,
+                edgecolor=config["edgecolor"],
+                linewidth=config["linewidth"]
+            )
+            
+            label_text = (
+                data_utils._humanize(unique_value)
+                if "data_utils" in globals()
+                else str(unique_value)
+            )
+            
+            # Create a single-color legend patch
+            legend_patch = mpatches.Patch(
+                facecolor=color,
+                edgecolor=config["edgecolor"],
+                label=label_text
+            )
+            
+            # Add legend with title on the LEFT
+            legend = ax.legend(
+                handles=[legend_patch],
+                frameon=False,
+                fontsize=config["legend_label_fontsize"],
+                loc="center left",                     
+                bbox_to_anchor=(-0.1, 0.5),           
+                title=legend_title if legend_title else var,
+                title_fontsize=config["legend_title_fontsize"],
+            )    
+
+            fig.canvas.draw()
+            tight_bbox = legend.get_window_extent(fig.canvas.get_renderer())
+            tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
+            legend_left = tight_bbox_fig.x0
+
+            
+        elif config['legend_type'] == 'colorbar':
             data.plot(
                 var, 
                 ax=ax, 
@@ -860,7 +962,7 @@ class GeoPlot:
             if 'annotation_y' in config:
                 annotation_y = config['annotation_y']
 
-            text_height = data_utils._get_text_height(
+            text_height = self._get_text_height(
                 fig, annotation, config['annotation_fontsize']
             )
             annotation_y = y0 - text_height - 0.01
@@ -921,6 +1023,47 @@ class GeoPlot:
             return pd.cut(series, bins=var_bins, labels=range(nbins), retbins=True, include_lowest=True)
         else:
             return pd.cut(series, nbins, labels=range(nbins), retbins=True, include_lowest=True)
+
+
+    def _get_text_height(self, fig: plt.Figure, s: str, fontsize: float) -> float:
+        """
+        Computes the relative height of a text string within a Matplotlib figure.
+    
+        Args:
+            fig (plt.Figure): The Matplotlib figure object.
+            s (str): The text string to measure.
+            fontsize (float): The font size of the text.
+    
+        Returns:
+            float: The height of the text relative to the figure's height (0-1 scale).
+    
+        Raises:
+            TypeError: If `fig` is not a Matplotlib Figure, `s` is not a string,
+                       or `fontsize` is not a number.
+        """
+    
+        # Input validation
+        if not isinstance(fig, plt.Figure):
+            raise TypeError(f"`fig` must be a matplotlib.figure.Figure, got {type(fig).__name__}")
+        if not isinstance(s, str):
+            raise TypeError(f"`s` must be a string, got {type(s).__name__}")
+        if not isinstance(fontsize, (int, float)):
+            raise TypeError(f"`fontsize` must be a number, got {type(fontsize).__name__}")
+    
+        # Get the renderer for the figure
+        renderer = fig.canvas.get_renderer()
+    
+        # Create a temporary text object at (0, 0) to measure its size
+        t = plt.text(0, 0, s, fontsize=fontsize)
+    
+        # Get bounding box
+        bb = t.get_window_extent(renderer=renderer)
+    
+        # Remove the temporary text
+        t.remove()
+    
+        # Return text height relative to figure height
+        return bb.height / fig.bbox.height
 
 
   
