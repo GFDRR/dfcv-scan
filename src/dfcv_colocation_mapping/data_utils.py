@@ -75,7 +75,7 @@ def _humanize(value, number=None) -> str:
         raise TypeError(f"Value must be int or float, got {type(value).__name__}")
 
     # Negative values are represented as "0"
-    if value < 0:
+    if value <= 0:
         return "0"
 
     # Large numbers (10 and above)
