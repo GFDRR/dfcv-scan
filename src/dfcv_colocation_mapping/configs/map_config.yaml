@@ -204,7 +204,7 @@ folium:
 legend_titles:
     worldpop: "Population per unit"
     conflict_count: "Number of conflict events"
-    mhs_dfcv_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
+    mhs_wbg_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
     mhs_exposure_relative: "Multi-hazard Exposure Index"
     mhs_intensity_weighted_exposure_relative: "Intensity-weighted \nMulti-hazard Exposure Index"
     intensity_weighted_exposure_relative: "Intensity-weighted \n{} exposure index (relative)"
@@ -218,9 +218,9 @@ legend_titles:
 var_titles:
     worldpop: "Population"
     conflict_count: "Number of conflict events"
-    mhs_dfcv_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
-    exposure_relative: "Relative {} Exposure"
+    mhs_wbg_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
     intensity_weighted_exposure_relative: "Hazard Intensity-weighted Relative \n{} Exposure"
+    exposure_relative: "Relative {} Exposure"
     exposure: "Absolute {} Exposure"
 
     
