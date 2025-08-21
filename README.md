@@ -20,9 +20,6 @@ Mapping Multi-hazard and Conflict Co-location in Fragile, Conflict, and Violence
 
 <!-- ABOUT THE PROJECT -->
 ## About the Project
-
-Disasters and conflicts are often interconnected and mutually reinforcing in ways that exacerbate vulnerability. Disasters can intensify pre-existing social tensions, trigger surges in violence, and increase vulnerability to exploitation by armed groups. Conversely, countries facing Fragility, Conflict, and Violence (FCV) challenges are typically more vulnerable to disasters. This highlights the need for DRM approaches that jointly account for both multi-hazard and conflict exposure. 
-
 We've developed an open‑source, globally applicable toolkit for rapid mapping and assessment of multi‑hazard and conflict exposure at subnational scales. This toolkit uses globally accessible hazard maps and conflict datasets and is designed to guide high-level, evidence-based DRM decision-making in FCV contexts. By identifying priority areas, this work aims to support more strategic resource allocation at the Disaster–FCV nexus. 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
