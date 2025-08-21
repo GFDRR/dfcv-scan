@@ -23,14 +23,9 @@ import itertools
 import ahpy
 
 import importlib_resources
-from dfcv_colocation_mapping import data_utils
+from src.dfcv_colocation_mapping import data_utils
 
 logging.basicConfig(level=logging.INFO, force=True)
-
-resources = importlib_resources.files("dfcv_colocation_mapping")
-_config_file = resources.joinpath("configs", "config.yaml")
-_acled_file = resources.joinpath("configs", "acled_creds.yaml")
-_adm_config_file = resources.joinpath("configs", "adm_config.yaml")
 
 
 class DatasetManager:
@@ -86,12 +81,13 @@ class DatasetManager:
         self.fathom_rp = fathom_rp
         self.fathom_threshold = fathom_threshold
 
+        resources = importlib_resources.files("dfcv_colocation_mapping")
         if config_file is None:
-            config_file = _config_file
+            config_file = resources.joinpath("configs", "config.yaml")
         if acled_file is None:
-            acled_file = _acled_file
+            acled_file = resources.joinpath("configs", "acled_creds.yaml")
         if adm_config_file is None:
-            adm_config_file = _adm_config_file
+            adm_config_file = resources.joinpath("configs", "adm_config.yaml")
             
         self.config = data_utils.read_config(config_file)
 
@@ -818,7 +814,7 @@ class DatasetManager:
         exposure_file: str, 
         threshold: float
     ) -> None:
-        resampled_file = f"{local_file.split('.')[0]}_RESAMPLED.tif"
+        resampled_file = local_file.replace(".tif", "_RESAMPLED.tif")
     
         if not os.path.exists(exposure_file):
             if not os.path.exists(resampled_file):
