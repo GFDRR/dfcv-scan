@@ -11,6 +11,7 @@ Mapping Multi-hazard and Conflict Co-location in Fragile, Conflict, and Violence
   <ol>
     <li><a href="#about-the-project">About the Project</a></li>
     <li><a href="#getting-started">Getting Started</a></li>
+    <li><a href="#usage">Usage</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
@@ -20,7 +21,7 @@ Mapping Multi-hazard and Conflict Co-location in Fragile, Conflict, and Violence
 
 <!-- ABOUT THE PROJECT -->
 ## About the Project
-We've developed an open‑source, globally applicable toolkit for rapid mapping and assessment of multi‑hazard and conflict exposure at subnational scales. This toolkit uses globally accessible hazard maps and conflict datasets and is designed to guide high-level, evidence-based DRM decision-making in FCV contexts. By identifying priority areas, this work aims to support more strategic resource allocation at the Disaster–FCV nexus. 
+We've developed an open‑source, globally applicable toolkit for rapid mapping and assessment of multi‑hazard and conflict exposure at subnational scales. This toolkit uses globally accessible hazard maps + conflict datasets and is designed to guide high-level, evidence-based DRM decision-making in FCV contexts. This work aims to help identify priorty areas and support more strategic resource allocation at the Disaster–FCV nexus. 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -40,14 +41,16 @@ To access ACLED conflict data, you must [register for an ACLED API Key](https://
 To install OGR/GDAL, follow [these instructions](https://ljvmiranda921.github.io/notebook/2019/04/13/install-gdal/).
 
 
+## Usage
+
 ### Demo Notebook
 <a target="_blank" href="https://colab.research.google.com/github/GFDRR/disaster-fcv-colocation-mapping/blob/master/examples/demo2.ipynb">
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
 
-### Example Usage
 
-At minimum, you will need to specify the ISO 3166-1 alpha-3 code (e.g., RWA for Rwanda) and administrative level (ADM1, ADM2, ADM3, etc.) for your country of interest. A list of ISO codes can be found [here](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-3). 
+### Examples
+At minimum, you will need to specify the [ISO 3166-1 alpha-3 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-3) and administrative level (ADM1, ADM2, ADM3, etc.) for your country of interest. 
 
 ```py
 from dfcv_colocation_mapping import data_download
@@ -62,11 +65,13 @@ dm = data_download.DatasetManager(
 geoplot = map_utils.GeoPlot(dm)
 ```
 
-For example, to create a choropleth map showing the multi-hazard score, run:
+### Choropleth Map
+To create a choropleth map showing the multi-hazard score, run:
 ```py
 geoplot.plot_choropleth("mhs_exposure_relative");
 ```
 
+### Bi-variate Choropleth Map
 To create bivariate choropleth maps, run:
 ```py
 geoplot.plot_bivariate_choropleth( 
@@ -74,6 +79,13 @@ geoplot.plot_bivariate_choropleth(
     var2="mhs_exposure_relative"
 );
 ```
+
+### Hazard Raster Map
+```py
+hazard = "earthquake"
+geoplot.plot_raster(hazard);
+```
+
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
