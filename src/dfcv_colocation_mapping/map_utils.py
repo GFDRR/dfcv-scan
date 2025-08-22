@@ -28,7 +28,7 @@ import pyfonts
 from rasterio.plot import show
 import rasterio.mask
 
-from src.dfcv_colocation_mapping import data_utils
+from dfcv_colocation_mapping import data_utils
 
 
 class GeoPlot:

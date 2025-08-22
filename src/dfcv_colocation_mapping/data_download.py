@@ -25,7 +25,7 @@ import itertools
 import ahpy
 
 from scipy.stats.mstats import gmean
-from src.dfcv_colocation_mapping import data_utils
+from dfcv_colocation_mapping import data_utils
 
 logging.basicConfig(level=logging.INFO, force=True)
 
