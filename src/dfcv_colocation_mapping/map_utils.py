@@ -822,6 +822,8 @@ class GeoPlot:
             data = []
             for key, value in zoom_to.items():
                 selected = self.data[self.data[key].isin([value])].to_crs(config['crs'])
+                if selected.empty:
+                    raise ValueError(f"{value} is not in {key}.")
                 data.append(selected)   
                 
             data = gpd.GeoDataFrame(pd.concat(data), geometry="geometry")
