@@ -11,7 +11,9 @@ choropleth:
     title: "{} in {}"
     title_fontsize: 15
     subtitle_fontsize: 10
+    subtitle_gap: 0.005
     annotation_fontsize: 6
+    annotation_gap: 0.01
     annotation_color: "#909090"
     
     legend_title_x: -5.05
@@ -23,12 +25,12 @@ choropleth:
     legend_title_fontsize: 7
     legend_label_fontsize: 7
 
-    barplot_x: -0.25
-    barplot_y: 0.25
+    barplot_x_offset: 0
+    barplot_y_offset: 0
     barplot_nbins: 10
     barplot_width: 0.2
-    barplot_height: 0.2
-    barplot_tick_size: 6
+    barplot_height: 0.3
+    barplot_tick_size: 7
     barplot_label_color: "dimgray"
     barplot_label_size: 5
     
@@ -39,6 +41,7 @@ choropleth:
     missing_label: "No data"
     missing_legend_fontsize: "small"
     missing_legend_loc: "lower right"
+    missing_hatch_linewidth: 0.1
     
     palette_name: "YlGnBu"
     create_cmap: False
@@ -65,9 +68,11 @@ bivariate_choropleth:
     title: "{} and {} in {}"
     title_fontsize: 15
     subtitle_fontsize: 10
+    subtitle_gap: 0.005
     annotation_fontsize: 6
-    legend_fontsize: 5
+    annotation_gap: 0.01
     annotation_color: "#909090"
+    legend_fontsize: 5
     
     missing_color: "gainsboro"
     missing_edgecolor: "dimgray"
@@ -76,6 +81,7 @@ bivariate_choropleth:
     missing_label: "No data"
     missing_legend_fontsize: "small"
     missing_legend_loc: "lower right"
+    missing_hatch_linewidth: 0.1
 
     fontsize: 5
     label_facecolor: 'white'
@@ -118,7 +124,9 @@ geoboundaries:
     
     title_fontsize: 15
     subtitle_fontsize: 10
+    subtitle_gap: 0.005
     annotation_fontsize: 6
+    annotation_gap: 0.01
     annotation_color: "#909090"
 
     edgecolor_with_group: "white"
@@ -156,7 +164,9 @@ raster:
 
     title_fontsize: 13
     subtitle_fontsize: 10
+    subtitle_gap: 0.005
     annotation_fontsize: 6
+    annotation_gap: 0.01
     annotation_color: "#909090"
 
     legend_title_x: 1.0
@@ -219,7 +229,7 @@ var_titles:
     worldpop: "Population"
     conflict_count: "Number of conflict events"
     mhs_wbg_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
-    intensity_weighted_exposure_relative: "Hazard Intensity-weighted Relative \n{} Exposure"
+    intensity_weighted_exposure_relative: "Hazard Intensity-weighted Relative {} Exposure"
     exposure_relative: "Relative {} Exposure"
     exposure: "Absolute {} Exposure"
 
