@@ -1,10 +1,12 @@
 import os
+import re
 import json
 import shutil
 import requests
 import logging
 import warnings
 import datetime
+from dateutil.relativedelta import relativedelta
 
 import pandas as pd
 import numpy as np
@@ -37,12 +39,13 @@ class DatasetManager:
         adm_source: str = 'geoboundary',
         acled_key: str = None,
         acled_email: str = None,
-        acled_start_date: str = None,
-        acled_end_date: str = None,
         acled_limit: str = None,
         acled_exclude: str = None,
         acled_country: str = None,
         acled_name: str = "acled",
+        ucdp_name: str = "ucdp",
+        conflict_start_date: str = None,
+        conflict_end_date: str = None,
         fathom_year: int = 2020,
         fathom_rp: int = 50,
         fathom_threshold: int = 50,
@@ -68,8 +71,8 @@ class DatasetManager:
             adm_source (str, optional): Administrative boundary source. Defaults to 'geoboundary'.
             acled_key (str, optional): ACLED API key. Defaults to None.
             acled_email (str, optional): ACLED account email. Defaults to None.
-            acled_start_date (str, optional): ACLED start date. Defaults to None.
-            acled_end_date (str, optional): ACLED end date. Defaults to None.
+            conflict_start_date (str, optional): Conflict start date. This is set to 10 years ago from today if none. Defaults to None.
+            conflict_end_date (str, optional): Conflict end date. This is set to the current date if none. Defaults to None.
             acled_limit (str, optional): Dictionary specifying filter conditions on columns and sub-columns. Defaults to None.
                 Examples of limit dictionary value:
                 limit = {"disorder_type": {"Strategic developments": {"sub_event_type": ["Looting/property destruction", "Arrests"]}}}
@@ -114,16 +117,28 @@ class DatasetManager:
         # Store ACLED credentials and filtering options
         self.acled_key = acled_key
         self.acled_email = acled_email
-        self.acled_start_date = acled_start_date
-        self.acled_end_date = acled_end_date
         self.acled_limit = acled_limit
         self.acled_exclude = acled_exclude
         self.acled_country = acled_country
+
+        # Store conflict start date and end date
+        self.conflict_start_date = conflict_start_date
+        self.conflict_end_date = conflict_end_date
+
+        if self.conflict_start_date is None:
+            self.conflict_start_date = (datetime.date.today() - relativedelta(years=10)).isoformat()
+        if self.conflict_end_date is None:
+            self.conflict_end_date = datetime.date.today().isoformat()
 
         # Store Fathom flood layer parameters
         self.fathom_year = fathom_year
         self.fathom_rp = fathom_rp
         self.fathom_threshold = fathom_threshold
+
+        # Get country name from ISO Code
+        self.country = pycountry.countries.get(alpha_3=self.iso_code)
+        if self.country is None:
+            raise ValueError(f"Invalid ISO code: {self.iso_code}")
 
         # Locate default configuration files if not provided
         resources = importlib_resources.files("dfcv_colocation_mapping")
@@ -147,6 +162,7 @@ class DatasetManager:
         self.global_name = global_name.upper()
         self.fathom_name = fathom_name.upper()
         self.acled_name = acled_name.upper()
+        self.ucdp_name = ucdp_name.upper()
 
         # Prepare directories for storing data
         self.data_dir = os.path.join(os.getcwd(), data_dir)
@@ -165,7 +181,8 @@ class DatasetManager:
         logging.info("Loading geoboundary...")
         try:
             self.geoboundary = self.download_geoboundary(adm_source)
-        except:
+        except Exception as e:
+            logging.info(e)
             logging.info("Loading geoboundaries failed. Trying with GADM...")
             self.geoboundary = self.download_geoboundary("gadm")
         self.merge_columns = list(self.geoboundary.columns)
@@ -175,10 +192,17 @@ class DatasetManager:
         self.hazards = self.download_hazards()
         self.fathom = self.download_fathom()
 
-        # Load conflict data
-        logging.info("Loading conflict data...")
+        logging.info(f"Downloading conflict data from {self.conflict_start_date} to {self.conflict_end_date}")
+
+        # Load acled conflict data
+        logging.info("Loading ACLED conflict data...")
         self.acled = self.download_acled()
         self.acled_agg = self.download_acled(aggregate=True)
+
+        # Load ucdp conflict data
+        logging.info("Loading UCDP conflict data...")
+        self.ucdp = self.download_ucdp()
+        self.ucdp_agg = self.download_ucdp(aggregate=True)
 
         # Compute multi-hazard scores
         logging.info("Calculating scores...")
@@ -304,8 +328,14 @@ class DatasetManager:
                 data.append(dataset)
 
         # Add aggregated ACLED data if available and non-empty
-        if self.acled_agg is not None and len(self.acled_agg) > 0:
-            data.append(self.acled_agg)
+        if self.acled_agg is not None:
+            if len(self.acled_agg) > 0:
+                data.append(self.acled_agg)
+
+        # Add aggregated ACLED data if available and non-empty
+        if self.ucdp_agg is not None:
+            if len(self.ucdp_agg) > 0:
+                data.append(self.ucdp_agg)
 
         if not data:
             raise ValueError("No datasets available to combine.")
@@ -319,7 +349,10 @@ class DatasetManager:
     def calculate_multihazard_score(
         self,
         data: gpd.GeoDataFrame,
-        conflict_column: str = "wbg_conflict",
+        conflict_columns: list = [
+            "wbg_acled_conflict",
+            "ucdp_conflict"
+        ],
         suffixes: list = [
             "exposure_relative", 
             "intensity_weighted_exposure_relative"
@@ -394,13 +427,15 @@ class DatasetManager:
             data[mhs_name] = data_utils._minmax_scale(mhs)
 
             # Optionally scale MHS by conflict
-            mhsc_name = f"mhs_{conflict_column}"
-            if suffix is not None:
-                mhsc_name = f"{mhsc_name}_{suffix}"
+            for conflict_column in conflict_columns:
+                mhsc_name = f"mhs_{conflict_column}"
+                
+                if suffix is not None:
+                    mhsc_name = f"{mhsc_name}_{suffix}"
 
-            if f"{conflict_column}_{suffix}" in data.columns:
-                conflict_scaled = data_utils._minmax_scale(data[f"{conflict_column}_{suffix}"])
-                data[mhsc_name] = data[mhs_name] * conflict_scaled
+                if f"{conflict_column}_{suffix}" in data.columns:
+                    conflict_scaled = data_utils._minmax_scale(data[f"{conflict_column}_{suffix}"])
+                    data[mhsc_name] = data[mhs_name] * conflict_scaled
     
         return data
 
@@ -514,10 +549,12 @@ class DatasetManager:
                         # Select relevant columns and rename them
                         geoboundary = geoboundary[["iso_code", "shapeName", "shapeID", "geometry"]]
                         geoboundary.columns = ["iso_code", adm_level, f"{adm_level}_ID", "geometry"]
-                        
+
+                        # Save geoboundary with renamed columns
                         datasets.append(geoboundary)
                         geoboundary.to_file(intermediate_file)
                         logging.info(f"Geoboundary file saved to {intermediate_file}.")
+                        
                     except Exception as e:
                         raise FileNotFoundError(f"Failed to read GeoJSON file {intermediate_file}: {str(e)}")
 
@@ -557,6 +594,89 @@ class DatasetManager:
         
         return geoboundary
 
+
+    def download_ucdp(self, aggregate: bool = False, column: str = "ucdp_conflict_exposure"):
+        local_file = self._build_filename(
+            self.iso_code, self.ucdp_name, self.local_dir, ext="geojson"
+        )
+        global_file = self._build_filename(
+            self.global_name, self.ucdp_name, self.global_dir, ext="csv"
+        )
+
+        if not os.path.exists(global_file):
+            dataset = f"{self.global_name}_{self.ucdp_name}".lower()
+            global_file = self.download_url(dataset=dataset, ext="csv")
+
+        if not os.path.exists(local_file):
+            ucdp = pd.read_csv(global_file, low_memory=False)
+            ucdp["country"] = ucdp["country"].apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x))
+            ucdp["country"] = ucdp["country"].str.strip()
+            ucdp = ucdp[ucdp["country"] == self.country.name]
+
+            ucdp = gpd.GeoDataFrame(
+                geometry=gpd.points_from_xy(ucdp["longitude"], ucdp["latitude"], crs=self.crs),
+                data=ucdp
+            )
+            ucdp["date_start"] = pd.to_datetime(ucdp["date_start"])
+            ucdp = ucdp[ucdp["date_start"] > self.conflict_start_date]
+            ucdp.to_file(local_file, driver="GeoJSON")            
+            logging.info(f"Saving UCDP to {local_file}")
+
+        ucdp = gpd.read_file(local_file)
+
+        if aggregate:
+            exposure_raster = self._build_filename(
+                self.iso_code, f"{self.ucdp_name}_exposure", self.local_dir, ext="tif"
+            )
+            exposure_vector = self._build_filename(
+                self.iso_code, f"{self.ucdp_name}_exposure_{self.adm_level}", self.local_dir, ext="geojson"
+            )
+
+            if not os.path.exists(exposure_vector):
+                out_tif = self._calculate_custom_conflict_exposure(local_file, conflict_src="ucdp")
+                out_tif, _ = self._calculate_exposure(out_tif, exposure_raster, threshold=1)
+                
+                data = self._calculate_zonal_stats(
+                    out_tif,
+                    column=column,
+                    stats_agg=["sum"],
+                    out_file=exposure_vector
+                )
+                if data is None or data.empty:
+                    raise ValueError("Exposure calculation failed or produced empty results.")
+
+                # Read exposure vector and clean zero values
+                ucdp_agg = gpd.read_file(exposure_vector)
+                ucdp_agg.loc[ucdp_agg[column] == 0, column] = None
+    
+                # Spatial join UCDP events with admin boundaries
+                try:
+                    admin = self.geoboundary
+                    ucdp = ucdp.sjoin(admin, how="left", predicate="intersects")
+                    ucdp = ucdp.drop(["index_right"], axis=1)
+                except Exception as e:
+                    raise ValueError(f"Spatial join failed: {e}")
+    
+                # Aggregate total conflict events
+                column = "conflict_count"
+                event_count = self._aggregate_data(
+                    ucdp, agg_col=column, agg_func="count"
+                )
+                event_count = event_count.rename(
+                    columns={column: f"ucdp_{column}"}
+                )
+                event_count = data_utils._merge_data(
+                    [admin, event_count], columns=[f"{self.adm_level}_ID"], how="left"
+                )
+                ucdp = data_utils._merge_data(
+                    [event_count, ucdp_agg], columns=self.merge_columns
+                )
+                ucdp.to_file(exposure_vector)
+
+            ucdp = gpd.read_file(exposure_vector)
+    
+        return ucdp       
+
     
     def download_acled(
         self, 
@@ -580,31 +700,27 @@ class DatasetManager:
             requests.RequestException: If the request to ACLED API fails.
             FileNotFoundError: If the output file cannot be written or read.
         """
-        
-        country = pycountry.countries.get(alpha_3=self.iso_code)
-        if country is None:
-            raise ValueError(f"Invalid ISO code: {self.iso_code}")
-
+    
         # Build file paths
         out_file = self._build_filename(self.iso_code, self.acled_name, self.local_dir, ext="geojson")
         agg_file = self._build_filename(self.iso_code, f"{self.acled_name}_{self.adm_level}", self.local_dir, ext="geojson")
-        exposure_raster = self._build_filename(self.iso_code, f"{self.acled_name}_exposure", self.local_dir, ext="tif")
+        
+        exposure_raster = self._build_filename(
+            self.iso_code, f"{self.acled_name}_exposure", self.local_dir, ext="tif"
+        )
         exposure_vector = self._build_filename(
             self.iso_code, f"{self.acled_name}_exposure_{self.adm_level}", self.local_dir, ext="geojson"
         )
 
         # Download ACLED data if needed
-        if self.overwrite or not os.path.exists(out_file):
-            if self.acled_end_date is None:
-                self.acled_end_date = datetime.date.today().isoformat()
-    
+        if self.overwrite or not os.path.exists(out_file):    
             logging.info(f"Downloading ACLED data for {self.iso_code}...")
     
             params = dict(
                 key=self.acled_key,
                 email=self.acled_email,
-                country=country.name,
-                event_date=f"{self.acled_start_date}|{self.acled_end_date}",
+                country=self.country.name,
+                event_date=f"{self.conflict_start_date}|{self.conflict_end_date}",
                 event_date_where="BETWEEN",
                 population=population,
                 page=1,
@@ -665,7 +781,6 @@ class DatasetManager:
 
         # Aggregate to admin units if requested
         if aggregate:
-            admin = self.geoboundary
             acled = self._aggregate_acled(
                 acled_file=out_file,
                 agg_file=agg_file,
@@ -783,7 +898,7 @@ class DatasetManager:
         exposure_raster: str,
         exposure_vector: str,
         prefix: str = "wbg",
-        column: str = "conflict_exposure"
+        column: str = "acled_conflict_exposure"
     ):
         """Aggregate ACLED data and calculate exposure at the administrative level.
 
@@ -821,7 +936,7 @@ class DatasetManager:
 
         # Calculate exposure vector if it does not exist
         if not os.path.exists(exposure_vector):
-            acled_tif = self._calculate_custom_acled_exposure(acled_file)
+            acled_tif = self._calculate_custom_conflict_exposure(acled_file, conflict_src="acled")
             out_tif, _ = self._calculate_exposure(acled_tif, exposure_raster, threshold=1)
             data = self._calculate_zonal_stats(
                 out_tif,
@@ -844,20 +959,22 @@ class DatasetManager:
         return acled
 
 
-    def _calculate_custom_acled_exposure(
+    def _calculate_custom_conflict_exposure(
         self,
-        acled_file: str,
+        conflict_file: str,
+        conflict_src: str = "acled",
         temp_name: str = "temp",
+        buffer_size: int = 3000,
         meter_crs: str = "EPSG:3857"
     ) -> str:
-        """Calculate a buffered ACLED exposure raster from point events.
+        """Calculate a buffered conflict exposure raster from point events.
 
-        This function applies event-specific buffer distances to ACLED events,
+        This function applies event-specific buffer distances to conflict events,
         creates a temporary GeoJSON file with buffered geometries, and then
         rasterizes it to match the asset grid.
     
         Args:
-            acled_file (str): Path to the raw ACLED GeoJSON file.
+            conflict_file (str): Path to the raw conflict GeoJSON file.
             temp_name (str, optional): Suffix for the temporary buffered GeoJSON. Defaults to "temp".
             meter_crs (str, optional): CRS to use for buffering in meters. Defaults to "EPSG:3857".
     
@@ -865,12 +982,12 @@ class DatasetManager:
             str: Path to the rasterized exposure file.
     
         Raises:
-            FileNotFoundError: If the ACLED file does not exist.
+            FileNotFoundError: If the conflict file does not exist.
             RuntimeError: If rasterization fails or GDAL command fails.
         """
-        # Check that the ACLED file exists
-        if not os.path.exists(acled_file):
-            raise FileNotFoundError(f"ACLED file not found: {acled_file}")
+        # Check that the conflict file exists
+        if not os.path.exists(conflict_file):
+            raise FileNotFoundError(f"conflict file not found: {conflict_file}")
 
         # Helper function to determine buffer size based on event type and fatalities
         def get_buffer_size(event, fatality):
@@ -884,16 +1001,23 @@ class DatasetManager:
             return 0
 
         # Create temporary buffered GeoJSON filename
-        filename = os.path.basename(acled_file).split(".")[0] + f"_{temp_name.upper()}.geojson"
+        filename = os.path.basename(conflict_file).split(".")[0] + f"_{temp_name.upper()}.geojson"
         temp_file = os.path.join(self.local_dir, filename)
 
         #Create temporary raster file for buffered data
         if not os.path.exists(temp_file):
-            data = gpd.read_file(acled_file)
+            data = gpd.read_file(conflict_file)
             data["values"] = 1
-            data["buffer_size"] = data.apply(
-                lambda x: get_buffer_size(x.event_type, x.fatalities), axis=1
-            )
+
+            # Get buffer size depending on conflict data source
+            if conflict_src == "acled":
+                data["buffer_size"] = data.apply(
+                    lambda x: get_buffer_size(x.event_type, x.fatalities), axis=1
+                )
+            elif conflict_src == "ucdp":
+                data["buffer_size"] = buffer_size
+
+            # Apply buffer using meter CRS
             data["geometry"] = data.to_crs(meter_crs).apply(
                 lambda x: x.geometry.buffer(x.buffer_size), axis=1
             )
@@ -902,7 +1026,7 @@ class DatasetManager:
             logging.info(f"Temporary file saved to {temp_file}.")
 
         # Define output raster path
-        out_file = os.path.join(self.local_dir, acled_file.replace(".geojson", ".tif"))
+        out_file = os.path.join(self.local_dir, conflict_file.replace(".geojson", ".tif"))
 
         # Rasterize if raster does not exist
         if not os.path.exists(out_file):
@@ -960,10 +1084,9 @@ class DatasetManager:
             else:
                 return np.nansum(a, **kwargs)
 
-        admin = self.geoboundary
-
         # Spatial join ACLED events with admin boundaries
         try:
+            admin = self.geoboundary
             agg = acled.sjoin(admin, how="left", predicate="intersects")
             agg = agg.drop(["index_right"], axis=1)
         except Exception as e:
@@ -975,10 +1098,16 @@ class DatasetManager:
             agg_col="population_best",
             agg_func=lambda x: _nansumwrapper(x),
         )
+        pop_sum = pop_sum.rename(
+            columns={"population_best": "acled_population_best"}
+        )
 
         # Aggregate total conflict events
         event_count = self._aggregate_data(
             agg, agg_col="conflict_count", agg_func="count"
+        )
+        event_count = event_count.rename(
+            columns={"conflict_count": "acled_conflict_count"}
         )
 
         # Aggregate conflict events where population_best is missing
@@ -986,6 +1115,9 @@ class DatasetManager:
             agg[agg["population_best"].isna()],
             agg_col="null_conflict_count",
             agg_func="count",
+        )
+        null_pop_event_count = null_pop_event_count.rename(
+            columns={"null_conflict_count": "acled_null_conflict_count"}
         )
 
         # Merge all aggregated data with admin boundaries
@@ -996,8 +1128,8 @@ class DatasetManager:
         )
 
         # Calculate population-weighted conflict exposure
-        agg[exposure_var] = agg["population_best"] / (
-            agg["conflict_count"] - agg["null_conflict_count"].fillna(0)
+        agg[exposure_var] = agg["acled_population_best"] / (
+            agg["acled_conflict_count"] - agg["acled_null_conflict_count"].fillna(0)
         )
         agg.loc[agg[exposure_var] == 0, exposure_var] = None
 
@@ -1033,7 +1165,7 @@ class DatasetManager:
 
         # Build path for the global version of the dataset
         global_file = self._build_filename(
-            self.global_name, dataset_name, self.global_dir, ext="tif"
+            self.global_name, dataset_name, self.global_dir, ext=ext
         )
 
         # Construct URL from config
@@ -1061,10 +1193,11 @@ class DatasetManager:
                     raise RuntimeError(f"Failed to download {dataset} from {url}: {e}")
 
             # Clip raster to country boundary if applicable
-            local_file = self._build_filename(self.iso_code, dataset_name, self.local_dir, ext="tif")
-            nodata = self.config.get("nodata", {}).get(dataset, [])
-            admin = self.geoboundary.dissolve(by="iso_code")
-            data_utils._clip_raster(global_file, local_file, admin, nodata)
+            local_file = self._build_filename(self.iso_code, dataset_name, self.local_dir, ext=ext)
+            if ext == "tif":
+                nodata = self.config.get("nodata", {}).get(dataset, [])
+                admin = self.geoboundary.dissolve(by="iso_code")
+                data_utils._clip_raster(global_file, local_file, admin, nodata)
     
         else:
             # For non-global datasets, just download locally
@@ -1103,7 +1236,7 @@ class DatasetManager:
         zip_dir = os.path.join(out_dir, dataset)
 
         # Download and extract ZIP if not already done
-        if not os.path.exists(zip_file):
+        if not os.path.exists(zip_file) and not os.path.exists(zip_dir):
             urllib.request.urlretrieve(url, zip_file)
             with zipfile.ZipFile(zip_file, "r") as zip_ref:
                 zip_ref.extractall(zip_dir)
@@ -1139,9 +1272,6 @@ class DatasetManager:
             # If no .geojson, convert from .json feature collection
             if len(geojson_files) == 0:
                 json_file = [file for file in os.listdir(zip_dir) if file.endswith(".json")][0]
-                if not json_files:
-                    raise FileNotFoundError(f"No .geojson or .json file found in {zip_dir}")
-                    
                 json_file = os.path.join(zip_dir, json_file)
                 with open(json_file) as data:
                     features = json.load(data)["features"]
@@ -1157,7 +1287,11 @@ class DatasetManager:
                 shutil.copyfile(os.path.join(zip_dir, geojson_file), out_file)
                 
             shutil.rmtree(zip_dir)
-
+            
+        elif ext == "csv":
+            csv_files = [file for file in os.listdir(zip_dir) if file.endswith(".csv")]
+            shutil.copyfile(os.path.join(zip_dir, csv_files[0]), out_file)
+            
         else:
             raise ValueError(f"Unsupported extension: {ext}")
 

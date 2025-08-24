@@ -26,7 +26,7 @@ choropleth:
     legend_label_fontsize: 7
 
     barplot_x_offset: 0
-    barplot_y_offset: 0
+    barplot_y_offset: -0.2
     barplot_nbins: 10
     barplot_width: 0.2
     barplot_height: 0.3
@@ -214,7 +214,8 @@ folium:
 legend_titles:
     worldpop: "Population per unit"
     conflict_count: "Number of conflict events"
-    mhs_wbg_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
+    mhs_wbg_acled_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
+    mhs_ucdp_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
     mhs_exposure_relative: "Multi-hazard Exposure Index"
     mhs_intensity_weighted_exposure_relative: "Intensity-weighted \nMulti-hazard Exposure Index"
     intensity_weighted_exposure_relative: "Intensity-weighted \n{} exposure index (relative)"
@@ -243,5 +244,6 @@ annotations:
     landslide: "Global Landslide Hazard Map, The World Bank (2021)"
     worldpop: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
     exposure: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
-    conflict: "Conflict data from Armed Conflict Location & Event Data Project (ACLED)"
+    acled: "Conflict data from Armed Conflict Location & Event Data Project (ACLED)"
+    ucdp: "Conflict data from UCDP (Sundberg, Ralph, and Erik Melander, 2013)"
     
