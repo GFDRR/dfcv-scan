@@ -605,7 +605,7 @@ class DatasetManager:
 
         if not os.path.exists(global_file):
             dataset = f"{self.global_name}_{self.ucdp_name}".lower()
-            global_file = self.download_url(dataset=dataset, ext="csv")
+            self.download_url(dataset=dataset, ext="csv")
 
         if not os.path.exists(local_file):
             ucdp = pd.read_csv(global_file, low_memory=False)
@@ -712,6 +712,10 @@ class DatasetManager:
             self.iso_code, f"{self.acled_name}_exposure_{self.adm_level}", self.local_dir, ext="geojson"
         )
 
+        if self.acled_key is None or self.acled_emails is None:
+            warnings.warn("WARNING: ACLED key or email is invalid.")
+            return
+
         # Download ACLED data if needed
         if self.overwrite or not os.path.exists(out_file):    
             logging.info(f"Downloading ACLED data for {self.iso_code}...")
@@ -731,12 +735,16 @@ class DatasetManager:
             len_subdata = -1
             data = []
             while len_subdata != 0:
-                logging.info(f"Reading ACLED page {params['page']}...")
-                response = requests.get(acled_url, params=params)
-                subdata = pd.DataFrame(response.json()["data"])
-                data.append(subdata)
-                len_subdata = len(subdata)
-                params["page"] = params["page"] + 1                
+                try:
+                    logging.info(f"Reading ACLED page {params['page']}...")
+                    response = requests.get(acled_url, params=params)
+                    subdata = pd.DataFrame(response.json()["data"])
+                    data.append(subdata)
+                    len_subdata = len(subdata)
+                    params["page"] = params["page"] + 1  
+                except:
+                    warnings.warn("WARNING: ACLED failed to download.")
+                    return
 
             # Concatenate all pages
             data = pd.concat(data)
