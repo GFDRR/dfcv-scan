@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import importlib_resources
 
 import matplotlib
@@ -20,7 +21,6 @@ import pycountry
 import folium
 import json
 
-import pycountry
 import seaborn as sns
 import pypalettes
 import pyfonts
@@ -708,6 +708,7 @@ class GeoPlot:
             annotation = self._get_annotation([var1, var2])
         else:
             annotation = self._get_annotation([var1, var2]) + f"{annotation}\n"
+            
         country = pycountry.countries.get(alpha_3=iso_code).name
 
         # If zoomed, adjust titles and add tiny map
@@ -852,8 +853,8 @@ class GeoPlot:
         if data[var].nunique() == 1:
             # Transform value and get color
             unique_value = data[var].dropna().unique()[0]
-            value = unique_value / 100
-            color = cmap(value) if 0 <= value <= 1 else cmap(0.5)
+            cmap_value = unique_value / 100 if 'relative' in var else unique_value
+            color = cmap(cmap_value) if 0 <= cmap_value <= 1 else cmap(0.5)
 
             # Plot single-color map
             data.plot(
@@ -883,6 +884,8 @@ class GeoPlot:
                 title=legend_title if legend_title else var,
                 title_fontsize=config["legend_title_fontsize"],
             )    
+
+            ax.add_artist(legend)
 
             # Determine left position of legend for alignment
             fig.canvas.draw()
@@ -1134,7 +1137,7 @@ class GeoPlot:
         padding = 0.01 * axis_height
     
         # Place legend just below the lower-right corner of the axis
-        ax.legend(
+        legend = ax.legend(
             handles=mpatch,
             loc="upper right",                             
             bbox_to_anchor=(pos.x1, pos.y0 - padding),     
@@ -1142,6 +1145,8 @@ class GeoPlot:
             fontsize=8,
             bbox_transform=ax.figure.transFigure           
         )
+
+        ax.add_artist(legend)
         
         return ax
 
@@ -1281,6 +1286,12 @@ class GeoPlot:
         # Title positioning defaults (can be overridden by config)
         title_x = config.get('title_x', x)
         title_y = config.get('title_y', y1)
+
+        if subtitle is None:
+            if 'conflict' in title.lower():
+                start_date = datetime.strptime(self.dm.conflict_start_date, "%Y-%m-%d")
+                end_date = datetime.strptime(self.dm.conflict_end_date, "%Y-%m-%d")
+                subtitle = f"Conflict events from {start_date.year} to {end_date.year}"
 
         # Add subtitle (if provided)
         if subtitle is not None:
