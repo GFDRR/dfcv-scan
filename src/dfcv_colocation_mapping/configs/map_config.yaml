@@ -229,7 +229,7 @@ legend_titles:
 var_titles:
     worldpop: "Population"
     conflict_count: "Number of conflict events"
-    mhs_wbg_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
+    mhs_wbg_acled_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
     intensity_weighted_exposure_relative: "Hazard Intensity-weighted Relative {} Exposure"
     exposure_relative: "Relative {} Exposure"
     exposure: "Absolute {} Exposure"
