@@ -712,7 +712,7 @@ class DatasetManager:
             self.iso_code, f"{self.acled_name}_exposure_{self.adm_level}", self.local_dir, ext="geojson"
         )
 
-        if self.acled_key is None or self.acled_emails is None:
+        if self.acled_key is None or self.acled_email is None:
             warnings.warn("WARNING: ACLED key or email is invalid.")
             return
 
