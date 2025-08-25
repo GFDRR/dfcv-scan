@@ -5,6 +5,7 @@ import shutil
 import requests
 import logging
 import warnings
+from tqdm import tqdm
 import datetime
 from dateutil.relativedelta import relativedelta
 
@@ -19,12 +20,15 @@ import geojson
 from osgeo import gdal
 import geopandas as gpd
 import rasterio as rio
+import rasterio.mask
 import rasterstats
 import pycountry
 
 import importlib_resources
 import itertools
 import ahpy
+import bs4
+import requests
 
 from scipy.stats.mstats import gmean
 from dfcv_colocation_mapping import data_utils
@@ -46,6 +50,7 @@ class DatasetManager:
         ucdp_name: str = "ucdp",
         conflict_start_date: str = None,
         conflict_end_date: str = None,
+        jrc_rp = 100,
         fathom_year: int = 2020,
         fathom_rp: int = 50,
         fathom_threshold: int = 50,
@@ -134,6 +139,7 @@ class DatasetManager:
         self.fathom_year = fathom_year
         self.fathom_rp = fathom_rp
         self.fathom_threshold = fathom_threshold
+        self.jrc_rp = jrc_rp
 
         # Get country name from ISO Code
         self.country = pycountry.countries.get(alpha_3=self.iso_code)
@@ -185,8 +191,8 @@ class DatasetManager:
 
         # Load hazard layers
         logging.info("Loading hazard layers...")
-        self.hazards = self.download_hazards()
         self.fathom = self.download_fathom()
+        self.hazards = self.download_hazards()
 
         logging.info(f"Downloading conflict data from {self.conflict_start_date} to {self.conflict_end_date}")
 
@@ -1223,7 +1229,7 @@ class DatasetManager:
             if ext == "tif":
                 nodata = self.config.get("nodata", {}).get(dataset, [])
                 admin = self.geoboundary.dissolve(by="iso_code")
-                data_utils._clip_raster(global_file, local_file, admin, nodata)
+                self._clip_raster(global_file, local_file, admin, nodata)
     
         else:
             # For non-global datasets, just download locally
@@ -1319,7 +1325,50 @@ class DatasetManager:
             shutil.copyfile(os.path.join(zip_dir, csv_files[0]), out_file)
             
         else:
-            raise ValueError(f"Unsupported extension: {ext}")
+            raise ValueError(f"Unsupported extension: {ext}")    
+
+    
+    def download_jrc(self, name: str = "global_fluvial_flood"):
+        out_dir = os.path.join(self.global_dir, name)
+        os.makedirs(out_dir, exist_ok=True)
+        
+        url = self.config["urls"]["global_fluvial_flood_url"].format(self.jrc_rp)
+        r = requests.get(url)
+        data = bs4.BeautifulSoup(r.text, "html.parser")
+
+        logging.info("Downloading Global Flood Dataset....")
+        links = [link["href"] for link in data.find_all("a") if "depth.tif" in link["href"]]
+        for link in tqdm(links, total=len(links)):          
+            out_file = os.path.join(out_dir, link)
+            if not os.path.exists(out_file):
+                urllib.request.urlretrieve(url+link, out_file)
+        
+        vrt_file = os.path.join(self.global_dir, f"{name.upper()}.vrt")
+        global_file = os.path.join(self.global_dir, f"{name.upper()}.tif")
+        
+        if not os.path.exists(global_file):
+            logging.info(f"Generating flood map. Hang tight, this might take a while...")
+            self._merge_tifs(f"{out_dir}/*.tif", vrt_file, global_file)   
+            logging.info(f"Flood map saved to {global_file}.")
+
+        local_file = self._build_filename(
+            self.iso_code, name.replace(f"global_", ""), self.local_dir, ext="tif"
+        )
+        if not os.path.exists(local_file):
+            admin = self.geoboundary.dissolve(by="iso_code")
+            self._clip_raster(global_file, local_file, admin)
+
+        return local_file
+
+        
+    def _merge_tifs(self, in_files, vrt_file, tif_file):
+        subprocess.call(
+            ["gdalbuildvrt", vrt_file, in_files], shell=True
+        )
+        subprocess.call(
+            ["gdal_translate", "-co", "TILED=YES", "-co", "COMPRESS=LZW", "-co", "BIGTIFF=YES", vrt_file, tif_file],
+            shell=True,
+        )
 
     
     def download_fathom(self) -> gpd.GeoDataFrame | None:
@@ -1369,19 +1418,12 @@ class DatasetManager:
                 if self.overwrite or not os.path.exists(proc_tif_file):
                     flood_dir = os.path.join(fathom_dir, folder, str(self.fathom_year), f"1in{self.fathom_rp}")
                     merged_file = os.path.join(fathom_dir, f"{name}.vrt")
-    
-                    subprocess.call(
-                        ["gdalbuildvrt", merged_file, f"{flood_dir}/*.tif"], shell=True
-                    )
-                    subprocess.call(
-                        ["gdal_translate", "-co", "TILED=YES", merged_file, raw_tif_file],
-                        shell=True,
-                    )
+                    self._merge_tifs(f"{flood_dir}/*.tif", merged_file, raw_tif_file)
 
                 # Clip raster to admin boundary
                 admin = self.geoboundary.dissolve(by="iso_code")
                 nodata = self.config["nodata"][folder.lower()]
-                data_utils._clip_raster(raw_tif_file, proc_tif_file, admin, nodata)
+                self._clip_raster(raw_tif_file, proc_tif_file, admin, nodata)
 
                 # Build exposure rasters
                 exposure_file = self._build_filename(
@@ -1477,7 +1519,13 @@ class DatasetManager:
                 logging.info(f"({index+1}/{len(datasets)}) Downloading {dataset}...")
 
                 # Download raster dataset (GeoTIFF)
-                local_file = self.download_url(dataset, ext='tif')
+                if 'flood' in dataset:
+                    if self.fathom is not None:
+                        continue
+                    local_file = self.download_jrc()
+                else:
+                    local_file = self.download_url(dataset, ext='tif')  
+                
                 dataset_name = dataset.replace(f"global_", "")
 
                 # File paths for derived exposures
@@ -1768,6 +1816,78 @@ class DatasetManager:
         
         return agg
 
+        
+    def _clip_raster(
+        self,
+        global_tif: str, 
+        local_tif: str, 
+        admin: gpd.GeoDataFrame, 
+        nodata: list = []
+    ) -> rio.io.DatasetReader:
+        """
+        Clips a global raster to the boundary of a given admin unit and saves it locally.
+    
+        Args:
+            global_tif (str): Path to the global raster file (GeoTIFF).
+            local_tif (str): Path to save the clipped raster file.
+            admin (gpd.GeoDataFrame): GeoDataFrame containing the admin boundary geometry.
+            nodata (list, optional): List of nodata values to mask. Defaults to [].
+    
+        Returns:
+            rasterio.io.DatasetReader: The clipped raster dataset.
+    
+        Raises:
+            FileNotFoundError: If the global raster file does not exist.
+            ValueError: If `admin` GeoDataFrame is empty or invalid.
+        """
+    
+        # Ensure the input raster exists
+        if not os.path.exists(global_tif):
+            raise FileNotFoundError(f"Global raster not found: {global_tif}")
+    
+        # Ensure the GeoDataFrame contains at least one geometry
+        if admin.empty:
+            raise ValueError("Admin GeoDataFrame is empty. Cannot perform clipping.")
+    
+        # Return existing raster if the clipped file already exists
+        if not os.path.exists(local_tif):
+            with rio.open(global_tif) as src:
+                if src.nodata is not None:
+                    nodata = [src.nodata] + nodata
+    
+                # Reproject the admin boundaries if CRS differs
+                if src.crs != admin.crs:
+                    admin = admin.to_crs(src.crs)
+    
+                # Extract the country boundary geometry for clipping
+                shape = [admin.iloc[0]["geometry"]]
+    
+                # Perform raster clipping using rasterio.mask
+                out_image, out_transform = rio.mask.mask(
+                    src, shape, crop=True, all_touched=True
+                )
+                for val in nodata:
+                    out_image[out_image == val] = -1
+    
+                # Update raster metadata to reflect changes
+                out_meta = src.meta.copy()
+                out_meta.update(
+                    {
+                        "driver": "GTiff",
+                        "height": out_image.shape[1],
+                        "width": out_image.shape[2],
+                        "transform": out_transform,
+                        "nodata": -1,
+                    }
+                )
+    
+            # Save the clipped raster to the specified output path
+            with rio.open(local_tif, "w", **out_meta) as dest:
+                dest.write(out_image)
+    
+        # Return the clipped raster
+        return rio.open(local_tif)
+
 
     def _calculate_zonal_stats(
         self,
@@ -1862,7 +1982,7 @@ class DatasetManager:
         return gpd.read_file(out_file)
 
 
-    def _build_filename(self, prefix, suffix, local_dir, ext="geojson") -> str:
+    def _build_filename(self, prefix, suffix, out_dir, ext="geojson") -> str:
         """
         Construct a standardized file path by combining a directory, prefix, suffix, and extension.
     
@@ -1873,18 +1993,18 @@ class DatasetManager:
         Args:
             prefix (str): Prefix for the file name (typically a dataset or country code).
             suffix (str): Suffix for the file name (e.g., variable or administrative level).
-            local_dir (str): Directory path where the file should be saved.
+            out_dir (str): Directory path where the file should be saved.
             ext (str, optional): File extension, defaults to "geojson".
     
         Returns:
             str: Full file path constructed from the provided components.
     
         Raises:
-            ValueError: If any of `prefix`, `suffix`, or `local_dir` is empty.
+            ValueError: If any of `prefix`, `suffix`, or `out_dir` is empty.
         """
-        if not prefix or not suffix or not local_dir:
+        if not prefix or not suffix or not out_dir:
             raise ValueError("Prefix, suffix, and local_dir must all be provided and non-empty.")
     
         # Construct and return the full file path
-        return os.path.join(local_dir, f"{prefix.upper()}_{suffix.upper()}.{ext}")
+        return os.path.join(out_dir, f"{prefix.upper()}_{suffix.upper()}.{ext}")
     

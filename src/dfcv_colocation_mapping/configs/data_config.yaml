@@ -3,10 +3,12 @@ hazards:
     landslide: 1
     cyclone: 1
     drought: 1
-    heat_stree: 1
-    pluvial_defended: 1
+    heat_stress: 1
+    fluvial_flood: 1
     fluvial_defended: 1
+    pluvial_defended: 1
     coastal_defended: 1
+    
 
 datasets: 
     - 'worldpop'
@@ -15,6 +17,7 @@ datasets:
     - 'global_cyclone'
     - 'global_drought'
     - 'global_heat_stress'
+    - 'global_fluvial_flood'
 
 threshold:
     global_earthquake: 0.18
@@ -22,6 +25,7 @@ threshold:
     global_cyclone: 80
     global_drought: -1
     global_heat_stress: 26
+    global_fluvial_flood: 0.50
     coastal_defended: 50
     pluvial_defended: 50
     fluvial_defended: 50
@@ -55,3 +59,5 @@ urls:
     global_drought_url: "https://storage.googleapis.com/noaa-nidis-drought-gov-data/current-conditions/tile/v1/ce-GLOBAL-ERA5_LAND_DAILY-speih-6mo/GLOBAL-ERA5_LAND_DAILY-speih-6mo.tif"
     # Source: https://zenodo.org/records/8310513
     global_heat_stress_url: "https://zenodo.org/records/8310513/files/GloUTCI-M_YEAR_2022_MONTH_10.zip"
+    # Source: https://data.jrc.ec.europa.eu/dataset/jrc-floods-floodmapgl_rp50y-tif
+    global_fluvial_flood_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/RP{}/"
