@@ -1674,8 +1674,14 @@ class DatasetManager:
 
             # Hazard raster values
             hazard = src2.read(1)
-            if 'drought' not in hazard_file.lower():
+            if (
+                'drought' not in hazard_file.lower() 
+                and 'heat_stress' not in hazard_file.lower() 
+            ):
                 hazard[hazard < 0] = 0
+
+            if 'heat_stress' in hazard_file.lower():
+                hazard = hazard / 100
 
             # Scale hazard values to [0, 1] for weighting
             hazard_scaled = data_utils._minmax_scale(hazard)

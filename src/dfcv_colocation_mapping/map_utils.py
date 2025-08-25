@@ -145,7 +145,7 @@ class GeoPlot:
         
         # Ensure the variable exists
         if var not in self.data.columns:
-            raise ValueError(f"Variable '{var}' not found in self.data columns.")
+            raise ValueError(f"Variable '{var}' not found in data columns.")
 
         # Refresh configuration and apply any overrides
         self.refresh()
@@ -272,8 +272,11 @@ class GeoPlot:
         # Open raster and mask no-data values
         with rio.open(raster_file) as src:
             out_image = src.read(1)
-            plot_data = np.copy(out_image) 
+            plot_data = np.array(np.copy(out_image), dtype=np.float32)
             plot_data[plot_data == src.nodata] = np.nan
+
+            if "heat_stress" in raster_name.lower():
+                plot_data = plot_data / 100
             
             img = ax.imshow(
                 plot_data,
@@ -435,7 +438,7 @@ class GeoPlot:
             legend.set_title(legend_title)
             legend._legend_box.align = config['group_legend_box_align']
 
-            # Determine left position of legend for alignment
+            # Determine leftmost position of legend for alignment
             fig.canvas.draw()
             bbox = legend.get_window_extent(fig.canvas.get_renderer())
             bbox_fig = bbox.transformed(fig.transFigure.inverted())
