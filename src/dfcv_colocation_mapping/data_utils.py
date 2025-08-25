@@ -6,8 +6,6 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
-import rasterio as rio
-import rasterio.mask
 import subprocess
 import humanize
 
@@ -186,77 +184,6 @@ def _merge_data(
         merged = gpd.GeoDataFrame(merged, geometry="geometry")
 
     return merged
-
-
-def _clip_raster(
-    global_tif: str, 
-    local_tif: str, 
-    admin: gpd.GeoDataFrame, 
-    nodata: list = []
-) -> rio.io.DatasetReader:
-    """
-    Clips a global raster to the boundary of a given admin unit and saves it locally.
-
-    Args:
-        global_tif (str): Path to the global raster file (GeoTIFF).
-        local_tif (str): Path to save the clipped raster file.
-        admin (gpd.GeoDataFrame): GeoDataFrame containing the admin boundary geometry.
-        nodata (list, optional): List of nodata values to mask. Defaults to [].
-
-    Returns:
-        rasterio.io.DatasetReader: The clipped raster dataset.
-
-    Raises:
-        FileNotFoundError: If the global raster file does not exist.
-        ValueError: If `admin` GeoDataFrame is empty or invalid.
-    """
-
-    # Ensure the input raster exists
-    if not os.path.exists(global_tif):
-        raise FileNotFoundError(f"Global raster not found: {global_tif}")
-
-    # Ensure the GeoDataFrame contains at least one geometry
-    if admin.empty:
-        raise ValueError("Admin GeoDataFrame is empty. Cannot perform clipping.")
-
-    # Return existing raster if the clipped file already exists
-    if not os.path.exists(local_tif):
-        with rio.open(global_tif) as src:
-            if src.nodata is not None:
-                nodata = [src.nodata] + nodata
-
-            # Reproject the admin boundaries if CRS differs
-            if src.crs != admin.crs:
-                admin = admin.to_crs(src.crs)
-
-            # Extract the country boundary geometry for clipping
-            shape = [admin.iloc[0]["geometry"]]
-
-            # Perform raster clipping using rasterio.mask
-            out_image, out_transform = rio.mask.mask(
-                src, shape, crop=True, all_touched=True
-            )
-            for val in nodata:
-                out_image[out_image == val] = -1
-
-            # Update raster metadata to reflect changes
-            out_meta = src.meta.copy()
-            out_meta.update(
-                {
-                    "driver": "GTiff",
-                    "height": out_image.shape[1],
-                    "width": out_image.shape[2],
-                    "transform": out_transform,
-                    "nodata": -1,
-                }
-            )
-
-        # Save the clipped raster to the specified output path
-        with rasterio.open(local_tif, "w", **out_meta) as dest:
-            dest.write(out_image)
-
-    # Return the clipped raster
-    return rio.open(local_tif)
 
 
 def read_config(config_file: str) -> dict:
