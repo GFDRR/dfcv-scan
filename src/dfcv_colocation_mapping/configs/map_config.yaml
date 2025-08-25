@@ -212,8 +212,9 @@ folium:
 
 
 legend_titles:
-    worldpop: "Population per unit"
+    worldpop: "Population"
     conflict_count: "Number of conflict events"
+    mhs_acled_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
     mhs_wbg_acled_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
     mhs_ucdp_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
     mhs_exposure_relative: "Multi-hazard Exposure Index"
@@ -229,7 +230,9 @@ legend_titles:
 var_titles:
     worldpop: "Population"
     conflict_count: "Number of conflict events"
+    mhs_acled_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
     mhs_wbg_acled_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
+    mhs_ucdp_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
     intensity_weighted_exposure_relative: "Hazard Intensity-weighted Relative {} Exposure"
     exposure_relative: "Relative {} Exposure"
     exposure: "Absolute {} Exposure"
@@ -241,6 +244,7 @@ annotations:
     mimu: "Administrative boundaries from Myanmar Information Management Unit (MIMU) v9.4"
     mhs: "Multi-hazard Score, The World Bank Group, 2025"
     earthquake: "Global Earthquake Model (GEM) Seismic Hazard Map (version 2023.1 - June 2023)"
+    drought: "SPEI Drought Indices from Drought.gov and CSIC (Vicente-Serrano et al., 2010)"
     landslide: "Global Landslide Hazard Map, The World Bank (2021)"
     worldpop: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
     exposure: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
