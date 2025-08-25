@@ -617,11 +617,11 @@ class DatasetManager:
             self.global_name, self.ucdp_name, self.global_dir, ext="csv"
         )
 
-        if not os.path.exists(global_file):
+        if self.overwrite or not os.path.exists(global_file):
             dataset = f"{self.global_name}_{self.ucdp_name}".lower()
             self.download_url(dataset=dataset, ext="csv")
 
-        if not os.path.exists(local_file):
+        if self.overwrite or not os.path.exists(local_file):
             ucdp = pd.read_csv(global_file, low_memory=False)
             ucdp["country"] = ucdp["country"].apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x))
             ucdp["country"] = ucdp["country"].str.strip()
@@ -650,7 +650,7 @@ class DatasetManager:
                 self.iso_code, f"{self.ucdp_name}_exposure_{self.adm_level}", self.local_dir, ext="geojson"
             )
 
-            if not os.path.exists(exposure_vector):
+            if self.overwrite or not os.path.exists(exposure_vector):
                 out_tif = self._calculate_custom_conflict_exposure(local_file, conflict_src="ucdp")
                 out_tif, _ = self._calculate_exposure(out_tif, exposure_raster, threshold=1)
                 
@@ -961,7 +961,7 @@ class DatasetManager:
         agg = gpd.read_file(agg_file)
 
         # Calculate exposure vector if it does not exist
-        if not os.path.exists(exposure_vector):
+        if self.overwrite or not os.path.exists(exposure_vector):
             acled_tif = self._calculate_custom_conflict_exposure(acled_file, conflict_src="acled")
             out_tif, _ = self._calculate_exposure(acled_tif, exposure_raster, threshold=1)
             data = self._calculate_zonal_stats(
@@ -1031,7 +1031,7 @@ class DatasetManager:
         temp_file = os.path.join(self.local_dir, filename)
 
         #Create temporary raster file for buffered data
-        if not os.path.exists(temp_file):
+        if self.overwrite or not os.path.exists(temp_file):
             data = gpd.read_file(conflict_file)
             data["values"] = 1
 
@@ -1055,7 +1055,7 @@ class DatasetManager:
         out_file = os.path.join(self.local_dir, conflict_file.replace(".geojson", ".tif"))
 
         # Rasterize if raster does not exist
-        if not os.path.exists(out_file):
+        if self.overwrite or not os.path.exists(out_file):
             try:
                 # Create empty raster based on asset template
                 with rio.open(self.asset_file) as src:
@@ -1209,7 +1209,7 @@ class DatasetManager:
         if self.global_name.lower() in dataset:
 
             # Download if not already present
-            if not os.path.exists(global_file):
+            if self.overwrite or not os.path.exists(global_file):
                 try:
                     if url.endswith(".zip"):
                         self.download_zip(url, dataset, out_file=global_file, ext=ext)
@@ -1228,7 +1228,7 @@ class DatasetManager:
         else:
             # For non-global datasets, just download locally
             local_file = self._build_filename(self.iso_code, dataset_name, self.local_dir, ext)
-            if not os.path.exists(local_file):
+            if self.overwrite or not os.path.exists(local_file):
                 if url.endswith(".zip"):
                     self.download_zip(url, dataset, out_file=local_file, ext=ext)
                 if url.endswith(".tif"):
@@ -1353,7 +1353,7 @@ class DatasetManager:
             return None
 
         # If processed dataset doesn't exist, generate it
-        if not os.path.exists(full_data_file):
+        if self.overwrite or not os.path.exists(full_data_file):
             full_data = None
             folders = next(os.walk(fathom_dir))[1]
             
@@ -1366,7 +1366,7 @@ class DatasetManager:
                 proc_tif_file = os.path.join(self.local_dir, f"{name}.tif")
 
                 # If processed file doesn't exist, build from VRT
-                if not os.path.exists(proc_tif_file):
+                if self.overwrite or not os.path.exists(proc_tif_file):
                     flood_dir = os.path.join(fathom_dir, folder, str(self.fathom_year), f"1in{self.fathom_rp}")
                     merged_file = os.path.join(fathom_dir, f"{name}.vrt")
     
@@ -1567,9 +1567,9 @@ class DatasetManager:
         resampled_file = local_file.replace(".tif", "_RESAMPLED.tif")
 
         # Only generate exposure if it hasn't already been computed
-        if not os.path.exists(exposure_file):
+        if self.overwrite or not os.path.exists(exposure_file):
             # Resample raster if resampled version does not already exist
-            if not os.path.exists(resampled_file):
+            if self.overwrite or not os.path.exists(resampled_file):
                 try:
                     self._resample_raster(local_file, resampled_file)
                 except Exception as e:
@@ -1816,7 +1816,7 @@ class DatasetManager:
         if out_file is None:
             out_file = os.path.join(self.local_dir, f"{name}_{self.adm_level}.geojson")
     
-        if not os.path.exists(out_file):
+        if self.overwrite or not os.path.exists(out_file):
             admin_file = self.admin_file
             admin = self.geoboundary
             original_crs = admin.crs
