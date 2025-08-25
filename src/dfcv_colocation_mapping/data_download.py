@@ -179,12 +179,8 @@ class DatasetManager:
 
         # Load geoboundaries, fallback to GADM if primary source fails
         logging.info("Loading geoboundary...")
-        try:
-            self.geoboundary = self.download_geoboundary(adm_source)
-        except Exception as e:
-            logging.info(e)
-            logging.info("Loading geoboundaries failed. Trying with GADM...")
-            self.geoboundary = self.download_geoboundary("gadm")
+        self.adm_source = adm_source
+        self.geoboundary = self.download_geoboundary_with_attempts()
         self.merge_columns = list(self.geoboundary.columns)
 
         # Load hazard layers
@@ -215,6 +211,19 @@ class DatasetManager:
         self.data = self.assign_grouping()
 
 
+    def download_geoboundary_with_attempts(self, attempts: int = 3):
+        for i in range(attempts):
+            try:
+                return self.download_geoboundary(self.adm_source)
+            except Exception as err:
+                logging.info(err)
+                logging.info(f"Loading geoboundaries failed. Trying again {i}/{attempts}")
+                pass
+                
+        logging.info(f"Loading geoboundaries failed. Trying with GADM...")
+        return self.download_geoboundary("gadm")
+
+
     def calculate_ahp(
         self, 
         ahp_precision: int = 5, 
@@ -240,7 +249,12 @@ class DatasetManager:
         """
         
         # Get list of hazards from config
-        hazards = self.config["hazards"].keys()
+        hazards_all = self.config["hazards"].keys()
+
+        hazards = []
+        for hazard in hazards_all:
+            if hazard in self.data.columns:
+                hazards.append(hazard)
 
         # Generate all unique pairwise combinations of hazards
         combinations = list(itertools.combinations(hazards, 2))
@@ -612,6 +626,10 @@ class DatasetManager:
             ucdp["country"] = ucdp["country"].apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x))
             ucdp["country"] = ucdp["country"].str.strip()
             ucdp = ucdp[ucdp["country"] == self.country.name]
+
+            if len(ucdp) == 0:
+                logging.info(f"No UCDP data found for {self.iso_code}.")
+                return 
 
             ucdp = gpd.GeoDataFrame(
                 geometry=gpd.points_from_xy(ucdp["longitude"], ucdp["latitude"], crs=self.crs),
@@ -1656,17 +1674,17 @@ class DatasetManager:
 
             # Hazard raster values
             hazard = src2.read(1)
-            hazard[hazard < 0] = 0
-
-            # For drought, invert values (negative intensity indicates severity)
-            if 'drought' in hazard_file.lower():
-                hazard = -hazard
+            if 'drought' not in hazard_file.lower():
+                hazard[hazard < 0] = 0
 
             # Scale hazard values to [0, 1] for weighting
             hazard_scaled = data_utils._minmax_scale(hazard)
 
             # Binary raster: hazard above threshold = 1, else 0
-            binary = (hazard >= threshold).astype(int)
+            if 'drought' in hazard_file.lower():
+                binary = (hazard <= threshold).astype(int)
+            else:
+                binary = (hazard >= threshold).astype(int)
 
             # Exposure: asset presence masked by hazard exceedance
             exposure = asset * binary
