@@ -21,7 +21,7 @@ Mapping Multi-hazard and Conflict Co-location in Fragile, Conflict, and Violence
 
 <!-- ABOUT THE PROJECT -->
 ## About the Project
-We've developed an open‑source, globally applicable toolkit for rapid mapping and assessment of multi‑hazard and conflict exposure at subnational scales. This toolkit uses globally accessible hazard maps + conflict datasets and is designed to guide high-level, evidence-based DRM decision-making in FCV contexts. This work aims to help identify priorty areas and support more strategic resource allocation at the Disaster–FCV nexus. 
+We've developed an open‑source, globally applicable toolkit for the rapid mapping and assessment of multi‑hazard and conflict exposure at subnational scales. This toolkit uses globally accessible hazard maps and conflict data to map the spatial distribution of exposure to co-occurring  hazards and conflict events. This work is designed to guide high-level, evidence-based DRM decision-making in FCV contexts, enabling them to efficiently identify priority areas and support more strategic resource allocation at the Disaster–FCV nexus. 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
