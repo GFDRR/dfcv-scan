@@ -12,7 +12,6 @@ from dateutil.relativedelta import relativedelta
 import pandas as pd
 import numpy as np
 
-import subprocess
 import urllib.request
 import zipfile
 
@@ -1280,17 +1279,11 @@ class DatasetManager:
             
             if len(tif_files) == 0:
                 # If no .tif, convert .grd file to GeoTIFF using GDAL
-                grd_file = [file for file in os.listdir(zip_dir) if file.endswith(".grd")][0]
-                tif_file = os.path.join(zip_dir, grd_file.replace(".grd", ".tif"))
-                subprocess.run(
-                    [
-                        "gdal_translate",
-                        "-a_srs",
-                        "EPSG:4326",
-                        os.path.join(zip_dir, grd_file),
-                        tif_file,
-                    ]
-                )
+                grd_files = [file for file in os.listdir(zip_dir) if file.endswith(".grd")]
+                if len(grd_files) > 0:
+                    grd_file = grd_files[0]
+                    tif_file = os.path.join(zip_dir, grd_file.replace(".grd", ".tif"))
+                    os.system(f"gdal_translate -a_srs EPSG:4326 {os.path.join(zip_dir, grd_file)} {tif_file}")
             else:
                 tif_file = tif_files[0]
         
@@ -1362,13 +1355,8 @@ class DatasetManager:
 
         
     def _merge_tifs(self, in_files, vrt_file, tif_file):
-        subprocess.call(
-            ["gdalbuildvrt", vrt_file, in_files], shell=True
-        )
-        subprocess.call(
-            ["gdal_translate", "-co", "TILED=YES", "-co", "COMPRESS=LZW", "-co", "BIGTIFF=YES", vrt_file, tif_file],
-            shell=True,
-        )
+        os.system(f"gdalbuildvrt {vrt_file} {in_files}")
+        os.system(f"gdal_translate -co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES {vrt_file} {tif_file}")
 
     
     def download_fathom(self) -> gpd.GeoDataFrame | None:
