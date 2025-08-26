@@ -1356,7 +1356,7 @@ class DatasetManager:
         
     def _merge_tifs(self, in_files, vrt_file, tif_file):
         os.system(f"gdalbuildvrt {vrt_file} {in_files}")
-        os.system(f"gdal_translate -co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES -co NUM_THREADS=ALL_CPUS --co GDAL_CACHEMAX=512 {vrt_file} {tif_file}")
+        os.system(f"gdal_translate -co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES -co NUM_THREADS=ALL_CPUS --config GDAL_CACHEMAX 512 {vrt_file} {tif_file}")
 
     
     def download_fathom(self) -> gpd.GeoDataFrame | None:
