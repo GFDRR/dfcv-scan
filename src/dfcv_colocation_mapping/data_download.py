@@ -1329,7 +1329,7 @@ class DatasetManager:
         r = requests.get(url)
         data = bs4.BeautifulSoup(r.text, "html.parser")
 
-        logging.info("Downloading Global Flood Dataset....")
+        logging.info(f"Downloading global flood data from {url}")
         links = [link["href"] for link in data.find_all("a") if "depth.tif" in link["href"]]
         for link in tqdm(links, total=len(links)):          
             out_file = os.path.join(out_dir, link)
