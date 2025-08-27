@@ -325,6 +325,11 @@ class GeoPlot:
         tight_bbox = cbar.ax.get_tightbbox(fig.canvas.get_renderer())
         tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
         legend_left = tight_bbox_fig.x0
+
+        # Add dissolved country outline
+        dissolved = data.dissolve("iso_code")
+        dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
+        dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
         
         if title is None:
             country = pycountry.countries.get(alpha_3=iso_code).name
@@ -1317,7 +1322,7 @@ class GeoPlot:
             )
 
         # Add title (if provided)
-        if title is not None:
+        if title is not None:                
             fig.text(
                 x=title_x, 
                 y=title_y, 
@@ -1377,14 +1382,17 @@ class GeoPlot:
                 return title
             elif key in var:
                 # Partial match with special cases
-                if "conflict" in var:
+                if "exposure" in var.lower():
+                    var = var.replace("_" + self.dm.asset, "")
+                    var = var.replace(self.dm.asset, "")
+                if "acled" in var or 'ucdp' in var:
                     return title.format("conflict")
                 elif "mhs" in var:
                     return title.format("multi-hazard")
                 else:
                     # Generic replacement for hazard names
-                    hazard = var.replace("_" + key, "").replace("_", " ")
-                    return title.format(hazard)
+                    inp = var.replace("_" + key, "").replace("_", " ")
+                    return title.format(inp)
 
         # Fallback: return variable as a title-cased string with "Risk"
         return var.replace("_", " ").title() + " Risk"

@@ -212,30 +212,30 @@ folium:
 
 
 legend_titles:
-    worldpop: "Population"
     conflict_count: "Number of conflict events"
-    mhs_acled_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
-    mhs_wbg_acled_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
-    mhs_ucdp_conflict_exposure_relative: "Multi-hazard Conflict \nExposure Index"
-    mhs_exposure_relative: "Multi-hazard Exposure Index"
-    mhs_intensity_weighted_exposure_relative: "Intensity-weighted \nMulti-hazard Exposure Index"
+    mhs_acled_worldpop_exposure_relative: "Multi-hazard Conflict \nExposure Index"
+    mhs_wbg_acled_worldpop_exposure_relative: "Multi-hazard Conflict \nExposure Index"
+    mhs_ucdp_worldpop_exposure_relative: "Multi-hazard Conflict \nExposure Index"
+    mhs_worldpop_exposure_relative: "Multi-hazard Exposure Index"
+    mhs_worldpop_intensity_weighted_exposure_relative: "Intensity-weighted \nMulti-hazard Exposure Index"
     intensity_weighted_exposure_relative: "Intensity-weighted \n{} exposure index (relative)"
     intensity_weighted_exposure: "Intensity-weighted \n{} exposure index"
     exposure_relative: "Proportion of the population \nexposed to {} (%)"
     exposure: "Population exposed to \n{}"
     earthquake: "Peak Ground \nAcceleration (PGA)"
     cyclone: "Windspeed"
+    worldpop: "Population"
 
 
 var_titles:
-    worldpop: "Population"
     conflict_count: "Number of conflict events"
-    mhs_acled_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
-    mhs_wbg_acled_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
-    mhs_ucdp_conflict_exposure_relative: "Multi-hazard Conflict Exposure Index"
-    intensity_weighted_exposure_relative: "Hazard Intensity-weighted Relative {} Exposure"
+    mhs_acled_worldpop_exposure_relative: "Multi-hazard Conflict Exposure Index"
+    mhs_wbg_acled_worldpop_exposure_relative: "Multi-hazard Conflict Exposure Index"
+    mhs_ucdp_worldpop_exposure_relative: "Multi-hazard Conflict Exposure Index"
+    intensity_weighted_exposure_relative: "Intensity-weighted Relative {} Exposure"
     exposure_relative: "Relative {} Exposure"
     exposure: "Absolute {} Exposure"
+    worldpop: "Population"
 
     
 annotations:
