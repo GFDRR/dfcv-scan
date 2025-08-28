@@ -99,15 +99,37 @@ geoplot.plot_choropleth("earthquake_worldpop_exposure_relative")
 ```
 ![choropleth](https://github.com/GFDRR/disaster-fcv-colocation-mapping/blob/master/assets/NPL_choropleth.png?raw=true)
 
+### Choropleth Map Zoomed
+```py
+geoplot.plot_choropleth(
+    var=f"wbg_acled_worldpop_exposure_relative",
+    zoom_to={"ADM1: "Lumbini"},
+)
+```
+![choropleth](https://github.com/GFDRR/disaster-fcv-colocation-mapping/blob/master/assets/NPL_choropleth_zoomed.png?raw=true)
+
+
 
 ### Bi-variate Choropleth Map
 ```py
 geoplot.plot_bivariate_choropleth( 
-    var1="ucdp_conflict_exposure_relative",
-    var2="earthquake_exposure_relative"
+    var1="wbg_acled_worldpop_exposure_relative",
+    var2="mhs_worldpop_exposure_intensity_weighted_relative"
 )
 ```
 ![choropleth](https://github.com/GFDRR/disaster-fcv-colocation-mapping/blob/master/assets/NPL_bivariate_choropleth.png?raw=true)
+
+
+### Bi-variate Choropleth Map Zoomed
+```py
+geoplot.plot_bivariate_choropleth( 
+    var1="wbg_acled_worldpop_exposure_relative",
+    var2="mhs_worldpop_exposure_intensity_weighted_relative",
+    zoom_to={"ADM1: "Bagmati"},
+)
+```
+![choropleth](https://github.com/GFDRR/disaster-fcv-colocation-mapping/blob/master/assets/NPL_bivariate_choropleth_zoomed.png?raw=true)
+
 
 
 ## Data Sources
