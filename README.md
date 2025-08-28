@@ -131,24 +131,30 @@ geoplot.plot_bivariate_choropleth(
 ![choropleth](https://github.com/GFDRR/disaster-fcv-colocation-mapping/blob/master/assets/NPL_bivariate_choropleth_zoomed.png?raw=true)
 
 
-
 ## Data Sources
 
 ### Administrative Boundaries
-- GADM
-- geoBoundaries
+- [GADM](https://gadm.org)
+- [geoBoundaries](https://www.geoboundaries.org)
 
 ### Asset Data
-- WorldPop Population Estimates (UN-adjusted)
+- [WorldPop Population Estimates](www.worldpop.org)
 
 ### Conflict Data
-- Armed Conflict Location and Event Data (ACLED)
-- Uppsala Conflict Data Program (UCDP)
+- [Armed Conflict Location and Event Data (ACLED)](https://acleddata.com/)
+- [Uppsala Conflict Data Program (UCDP)](https://ucdp.uu.se/downloads/)
 
 ### Hazard Data
-- Global Landslide Hazard Map
-- Global Seismic Hazard Map
-- Global Model of Cyclone Wind
+- [Global Landslide Hazard Map](https://datacatalog.worldbank.org/search/dataset/0037584)
+- [Global Seismic Hazard Map (475-year RP)](https://www.globalquakemodel.org/product/global-seismic-hazard-map)
+- [Global Model of Cyclone Wind (100-year RP)](https://data.humdata.org/dataset/cyclone-wind-100-years-return-period)
+- [Standardized Precipitation and Evapotranspiration Index (SPEI)](https://www.drought.gov/data-download)
+- [Flood Hazard Map of the World (100-year RP)](https://data.jrc.ec.europa.eu/dataset/jrc-floods-floodmapgl_rp100y-tif)
+- [GloUTCI-M: A Global monthly 1 km Universal Thermal Climate Index](https://zenodo.org/record/8310513) 
+
+
+
+<small>*RP = return period</small>
 
 <!-- CONTRIBUTING -->
 ## Contributing
@@ -181,6 +187,7 @@ Distributed under the Apache 2.0 License. See `LICENSE.txt` for more information
 - The World Bank Group (n.d.). Global landslide hazard map. World Bank Data Catalog. Creative Commons Attribution-Non Commercial 4.0 license. https://datacatalog.worldbank.org/search/dataset/0037584
 - National Integrated Drought Information System (NIDIS) (n.d.). Drought.gov Data Download (GIS and Web-Ready) [web page]. U.S. Drought Portal. https://www.drought.gov/data-download
 - Zhiwei Yang, Jian Peng, & Yanxu Liu. (2023). GloUTCI-M: A Global Monthly 1 km Universal Thermal Climate Index Dataset from 2000 to 2022 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.8310513
+-  Yang, Z., Peng, J., Liu, Y., Jiang, S., Cheng, X., Liu, X., Dong, J., Hua, T., and Yu, X.: GloUTCI-M: A Global monthly 1 km Universal Thermal Climate Index dataset from 2000 to 2022, Earth Syst. Sci. Data, 16, 2407–2424, https://doi.org/10.5194/essd-16-2407-2024, 2024.
 </details>
 
 
