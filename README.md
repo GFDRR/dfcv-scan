@@ -5,43 +5,48 @@ Mapping Multi-hazard and Conflict Co-location in Fragile, Conflict, and Violence
 
 </div>
 
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li><a href="#about-the-project">About the Project</a></li>
-    <li><a href="#getting-started">Getting Started</a></li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#citation">Citation</a></li>
-  </ol>
-</details>
-
 <!-- ABOUT THE PROJECT -->
 ## About the Project
-We've developed an open‑source, globally applicable toolkit for the rapid mapping and assessment of multi‑hazard and conflict exposure at subnational scales. This toolkit uses globally accessible hazard maps and conflict data to map the spatial distribution of exposure to co-occurring  hazards and conflict events. This work is designed to guide high-level, evidence-based DRM decision-making in FCV contexts, enabling them to efficiently identify priority areas and support more strategic resource allocation at the Disaster–FCV nexus. 
+We've developed an open‑source, globally applicable toolkit for the rapid mapping and assessment of multi‑hazard and conflict exposure at subnational scales. This toolkit uses globally accessible hazard maps and conflict data to map the spatial distribution of co-occurring  hazards and conflict exposure. Our work is designed to guide high-level, evidence-based DRM decision-making in FCV contexts and enable them to efficiently identify priority areas for more strategic resource allocation at the Disaster–FCV nexus. 
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<!-- TABLE OF CONTENTS -->
+## Table of Contents
+  <ol>
+    <li><a href="#installation">Installation</a></li>
+    <li><a href="#accessing-acled">Accessing ACLED</a></li>
+    <li><a href="#installing-ogr/gdal">Installing OGR/GDAL</a></li>
+    <li><a href="#getting-started">Getting Started</a></li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#license">License</a></li>
+    <li><a href="#references">References</a></li>
+    <li><a href="#citation">Citation</a></li>
+  </ol>
 
 <!-- GETTING STARTED -->
-## Getting Started
+## Installation
 
-<!-- INSTALLATION -->
-### Installation
 ```sh
 pip install dfcv-colocation-mapping
 ```
 
-### ACLED API
-To access ACLED conflict data, you must [register for an ACLED API Key](https://acleddata.com/api-documentation/getting-started).
+## Accessing ACLED
+To access ACLED conflict data, you must register for an ACLED API Key. Please refer to the official [ACLED access guide](https://acleddata.com/methodology/acled-access-guide) for instructions.
 
-### OGR/GDAL Installation
-To install OGR/GDAL, follow [these instructions](https://ljvmiranda921.github.io/notebook/2019/04/13/install-gdal/).
+## Installing OGR/GDAL 
+The simplest way to install OGR/GDAL is to execute the following command:
+```sh
+conda install gdal
+```
+
+Alternatively, if you're using Linux, run the command: 
+```sh
+apt install gdal-bin
+```
+
+For more information on how to install OGR/GDAL, see [this guide](https://ljvmiranda921.github.io/notebook/2019/04/13/install-gdal/).
 
 
-## Usage
+## Getting Started
 
 ### Demo Notebook
 <a target="_blank" href="https://colab.research.google.com/github/GFDRR/disaster-fcv-colocation-mapping/blob/master/examples/demo2.ipynb">
@@ -49,8 +54,8 @@ To install OGR/GDAL, follow [these instructions](https://ljvmiranda921.github.io
 </a>
 
 
-### Examples
-At minimum, you will need to specify the [ISO 3166-1 alpha-3 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-3) and administrative level (ADM1, ADM2, ADM3, etc.) for your country of interest. 
+### Usage Example
+At minimum, you will need to specify the country's [ISO code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-3) and administrative level (e.g. ADM1, ADM2, etc.). If you have an ACLED API key, you may also  specify it here. 
 
 ```py
 from dfcv_colocation_mapping import data_download
@@ -59,35 +64,60 @@ from dfcv_colocation_mapping import map_utils
 dm = data_download.DatasetManager(
     iso_code="RWA", 
     adm_level="ADM3",
-    acled_key=<INSERT ACLED KEY HERE>,
-    acled_email=<INSERT ACLED EMAIL HERE>,
+    acled_key=ACLED_API_KEY,
+    acled_email=ACLED_EMAIL,
 )
 geoplot = map_utils.GeoPlot(dm)
 ```
 
-### Choropleth Map
-To create a choropleth map showing the multi-hazard score, run:
+### AHP Calculation
 ```py
-geoplot.plot_choropleth("mhs_exposure_relative");
+dm.calculate_ahp()
 ```
 
-### Bi-variate Choropleth Map
-To create bivariate choropleth maps, run:
+### Geoboundaries Map
 ```py
-geoplot.plot_bivariate_choropleth( 
-    var1="wbg_conflict_exposure_relative",
-    var2="mhs_exposure_relative"
-);
+geoplot.plot_geoboundaries(
+    adm_level="ADM2", 
+    group="ADM1",
+)
 ```
 
 ### Hazard Raster Map
 ```py
-hazard = "earthquake"
-geoplot.plot_raster(hazard);
+geoplot.plot_raster("earthquake")
 ```
 
+### Choropleth Map
+```py
+geoplot.plot_choropleth("earthquake_worldpop_exposure_relative")
+```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+### Bi-variate Choropleth Map
+```py
+geoplot.plot_bivariate_choropleth( 
+    var1="ucdp_conflict_exposure_relative",
+    var2="earthquake_exposure_relative"
+)
+```
+
+## Data Sources
+
+### Administrative Boundaries
+- GADM
+- geoBoundaries
+
+### Asset Data
+- WorldPop Population Estimates (UN-adjusted)
+
+### Conflict Data
+- Armed Conflict Location and Event Data (ACLED)
+- Uppsala Conflict Data Program (UCDP)
+
+### Hazard Data
+- Global Landslide Hazard Map
+- Global Seismic Hazard Map
+- Global Model of Cyclone Wind
 
 <!-- CONTRIBUTING -->
 ## Contributing
@@ -95,24 +125,38 @@ geoplot.plot_raster(hazard);
 Interested in contributing? Check out the contribution guidelines at `CONTRIBUTION.md`.
 
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 <!-- LICENSE -->
 ## License
 
 Distributed under the Apache 2.0 License. See `LICENSE.txt` for more information.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-<!-- CONTACT -->
-## Contact
-Issa Tingzon: tisabelle@worldbank.org or issatingzon@gmail.com
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<details>
+  <summary> <h2>References</h2></summary>
+
+- GADM, https://gadm.org
+- WorldPop, www.worldpop.org
+- geoBoundaries, https://www.geoboundaries.org
+- Runfola, D. et al. (2020) geoBoundaries: A global database of political administrative boundaries. PLoS ONE 15(4): e0231866. https://doi.org/10.1371/journal.pone.0231866
+- ACLED, “Armed Conflict Location & Event Data (ACLED) Codebook,” 3 October 2024. www.acleddata.com.
+- Clionadh Raleigh, Roudabeh Kishi, and Andrew Linke, “Political instability patterns are obscured by conflict dataset scope conditions, sources, and coding choices,” Humanities and Social Sciences Communications, 25 February 2023. https://doi.org/10.1057/s41599-023-01559-4
+- Davies, S., Pettersson, T., Sollenberg, M., & Öberg, M. (2025). Organized violence 1989–2024, and the challenges of identifying civilian victims. Journal of Peace Research, 62(4). https://ucdp.uu.se/downloads
+- Sundberg, Ralph and Erik Melander (2013) Introducing the UCDP Georeferenced Event Dataset. Journal of Peace Research 50(4).
+- Bondarenko M., Kerr D., Sorichetta A., and Tatem, A.J. 2020. Census/projection-disaggregated gridded population datasets, adjusted to match the corresponding UNPD 2020 estimates, for 183 countries in 2020 using Built-Settlement Growth Model (BSGM) outputs. WorldPop, University of Southampton, UK. doi:10.5258/SOTON/WP00685
+- K. Johnson, M. Villani, K. Bayliss, C. Brooks, S. Chandrasekhar, T. Chartier, Y. Chen, J. Garcia-Pelaez, R. Gee, R. Styron, A. Rood, M. Simionato, M. Pagani (2023). Global Earthquake Model (GEM) Seismic Hazard Map (version 2023.1 - June 2023), DOI: https://doi.org/10.5281/zenodo.8409647
+- United Nations Office for Disaster Risk Reduction (UNDRR) (n.d.). Global model of cyclone wind 50, 100, 250, 500 and 1000 years return period. Humanitarian Data Exchange (HDX). https://data.humdata.org/dataset/cyclone-wind-100-years-return-period
+- The World Bank Group (n.d.). Global landslide hazard map. World Bank Data Catalog. Creative Commons Attribution-Non Commercial 4.0 license. https://datacatalog.worldbank.org/search/dataset/0037584
+- National Integrated Drought Information System (NIDIS) (n.d.). Drought.gov Data Download (GIS and Web-Ready) [web page]. U.S. Drought Portal. https://www.drought.gov/data-download
+- Zhiwei Yang, Jian Peng, & Yanxu Liu. (2023). GloUTCI-M: A Global Monthly 1 km Universal Thermal Climate Index Dataset from 2000 to 2022 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.8310513
+</details>
+
+
 
 <!-- CITATION -->
 ## Citation
-If you find this repository useful, please consider giving a star ⭐ and citation 🦖:
+
 ```
 @misc{tingzon2025mapping,
   title={Mapping Multi-hazard and Conflict Co-location in Fragile, Conflict, and Violence (FCV)-affected Countries},
@@ -123,6 +167,3 @@ If you find this repository useful, please consider giving a star ⭐ and citati
   howpublished={\url{https://github.com/GFDRR/disaster-fcv-colocation-mapping}}
 }
 ```
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
