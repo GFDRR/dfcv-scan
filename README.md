@@ -7,7 +7,7 @@ Mapping Multi-hazard and Conflict Co-location in Fragile, Conflict, and Violence
 
 <!-- ABOUT THE PROJECT -->
 ## About the Project
-We've developed an open‑source, globally applicable toolkit for the rapid mapping and assessment of multi‑hazard and conflict exposure at subnational scales. This toolkit uses globally accessible hazard maps and conflict data to map the spatial distribution of co-occurring  hazards and conflict exposure. Our work is designed to guide high-level, evidence-based DRM decision-making in FCV contexts and enable them to efficiently identify priority areas for more strategic resource allocation at the Disaster–FCV nexus. 
+We've developed an open‑source, globally applicable toolkit for the rapid mapping and assessment of multi‑hazard and conflict exposure at subnational scales. This toolkit uses globally accessible hazard maps and conflict data to map the spatial distribution of co-occurring multi-hazard and conflict exposure. Our work is designed to guide high-level, evidence-based DRM decision-making in FCV contexts and enable them to efficiently identify priority areas for more strategic resource allocation at the Disaster–FCV nexus. 
 
 <!-- TABLE OF CONTENTS -->
 ## Table of Contents
@@ -30,7 +30,7 @@ pip install dfcv-colocation-mapping
 ```
 
 ## Accessing ACLED
-To access ACLED conflict data, you must register for an ACLED API Key. Please refer to the official [ACLED access guide](https://acleddata.com/methodology/acled-access-guide) for instructions.
+To access ACLED conflict data, you must register for an ACLED API Key. Please refer to the official [ACLED Access Guide](https://acleddata.com/methodology/acled-access-guide) for instructions.
 
 ## Installing OGR/GDAL 
 The simplest way to install OGR/GDAL is to execute the following command:
@@ -54,7 +54,7 @@ For more information on how to install OGR/GDAL, see [this guide](https://ljvmir
 </a>
 
 
-### Usage Example
+### Example Usage
 At minimum, you will need to specify the country's [ISO code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-3) and administrative level (e.g. ADM1, ADM2, etc.). If you have an ACLED API key, you may also  specify it here. 
 
 ```py
@@ -70,7 +70,8 @@ dm = data_download.DatasetManager(
 geoplot = map_utils.GeoPlot(dm)
 ```
 
-### AHP Calculation
+### AHP Calculation [Optional]
+For the calculation of the Multi-hazard Score (MHS), you can generate custom weights per hazard using Analytic Hierarchy Process (AHP), as implemented in [AHPy](https://github.com/PhilipGriffith/AHPy). 
 ```py
 dm.calculate_ahp()
 ```
@@ -83,15 +84,21 @@ geoplot.plot_geoboundaries(
 )
 ```
 
+![geoboundaries](https://github.com/GFDRR/disaster-fcv-colocation-mapping/blob/master/assets/NPL_geoboundaries.png?raw=true)
+
 ### Hazard Raster Map
 ```py
 geoplot.plot_raster("earthquake")
 ```
+![raster](https://github.com/GFDRR/disaster-fcv-colocation-mapping/blob/master/assets/NPL_raster.png?raw=true)
+
 
 ### Choropleth Map
 ```py
 geoplot.plot_choropleth("earthquake_worldpop_exposure_relative")
 ```
+![choropleth](https://github.com/GFDRR/disaster-fcv-colocation-mapping/blob/master/assets/NPL_choropleth.png?raw=true)
+
 
 ### Bi-variate Choropleth Map
 ```py
@@ -100,6 +107,8 @@ geoplot.plot_bivariate_choropleth(
     var2="earthquake_exposure_relative"
 )
 ```
+![choropleth](https://github.com/GFDRR/disaster-fcv-colocation-mapping/blob/master/assets/NPL_bivariate_choropleth.png?raw=true)
+
 
 ## Data Sources
 
