@@ -551,14 +551,6 @@ class GeoPlot:
                 else:                
                     n += 500
 
-            # Force layout so we get the correct bbox
-            #ax.figure.canvas.draw()
-            #renderer = ax.figure.canvas.get_renderer()
-            
-            # Height of legend1 in axes fraction units
-            #gap = 0.01
-            #bb1 = legend1.get_window_extent(renderer).transformed(ax.figure.transFigure.inverted())
-
             # Force draw to get sizes
             ax.figure.canvas.draw()
             renderer = ax.figure.canvas.get_renderer()
@@ -724,7 +716,7 @@ class GeoPlot:
 
         # Add labels if number of units is below threshold
         if len(data_adm) < max_adms:
-            data_adm.apply(lambda x: ax.annotate(
+            data_adm.to_crs(config["crs"]).apply(lambda x: ax.annotate(
                 text=x[adm_level].replace("(", "\n("), 
                 xy=x.geometry.centroid.coords[0], 
                 ha='center', 
