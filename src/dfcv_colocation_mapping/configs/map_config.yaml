@@ -118,6 +118,7 @@ geoboundaries:
     figsize_x: 10
     figsize_y: 10
     dpi: 300
+    crs: "EPSG:3857"
 
     title: "{} Adminstrative Units"
     legend_title: "Regional Groupings"
@@ -187,6 +188,22 @@ raster:
     cbar_bbox_height: 1
     cbar_pad: 0.04
     cbar_fontsize: 7
+
+
+points:
+    figsize_x: 10
+    figsize_y: 10
+    dpi: 300
+    crs: "EPSG:3857"
+
+    legend_y: 0.5
+    legend_title_fontsize: 5
+    legend_label_fontsize: 5
+    edgecolor: "dimgray"
+    linewidth: 0.2
+
+    labelspacing: 1.5
+
 
 
 folium:

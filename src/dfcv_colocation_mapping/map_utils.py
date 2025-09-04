@@ -1,4 +1,6 @@
 import os
+import math
+import warnings
 from datetime import datetime
 import importlib_resources
 
@@ -7,6 +9,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.ticker as mticker
 import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
+from matplotlib.lines import Line2D
 from matplotlib.colors import ListedColormap
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
@@ -28,7 +32,12 @@ import pyfonts
 from rasterio.plot import show
 import rasterio.mask
 
+from sklearn.cluster import DBSCAN
+from geopy.distance import great_circle
+from shapely.geometry import MultiPoint
+
 from dfcv_colocation_mapping import data_utils
+from vincenty import vincenty
 
 
 class GeoPlot:
@@ -111,7 +120,7 @@ class GeoPlot:
             raise KeyError(f"Key '{key}' not found in map configuration")
 
         # Update the configuration for the specified key
-        self.map_config[key].update(kwargs)
+        self.map_config[key].update(kwargs)      
 
 
     def plot_folium(
@@ -324,7 +333,7 @@ class GeoPlot:
         # Determine left position of legend for alignment
         tight_bbox = cbar.ax.get_tightbbox(fig.canvas.get_renderer())
         tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
-        legend_left = tight_bbox_fig.x0
+        xpos = tight_bbox_fig.x0
 
         # Add dissolved country outline
         dissolved = data.dissolve("iso_code")
@@ -341,10 +350,266 @@ class GeoPlot:
             annotation = self._get_annotation([raster_name], add_adm=False) + f"{annotation}\n"
 
         # Add titles and annotations with layout adjusted to legend
-        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)  
+        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=xpos)  
         ax.axis("off")
 
         return ax
+
+
+    def plot_points(
+        self, 
+        column: str = None, 
+        dataset: str = "acled",
+        ax: matplotlib.axes.Axes = None,
+        xpos: float = None,
+        markerscale: float = 1,
+        clustering: bool = True,
+        distance: int = 50,
+        kwargs: dict = None,
+        key: str = "points"
+    ):
+        self.refresh()
+        if kwargs is not None:
+            self.update(key, kwargs)
+        config = self.map_config[key]
+        
+        data = self.data.copy()
+        iso_code = data.iso_code.values[0]
+
+        # Initialize figure
+        if ax is None:   
+            fig, ax = plt.subplots(
+                figsize=(config['figsize_x'], config['figsize_y']),  
+                dpi=config['dpi']
+            )
+            data_adm = data.dissolve(self.dm.adm_level).reset_index()
+            data_adm.to_crs(config["crs"]).plot(
+                ax=ax, 
+                facecolor="none", 
+                edgecolor=config["edgecolor"], 
+                lw=config["linewidth"]
+            )
+
+        if 'legend_x' in config:
+            xpos = config["legend_x"]
+        if 'legend_y' in config:
+            ypos = config["legend_y"]
+        bbox_to_anchor = [xpos, ypos]
+
+        if dataset == "acled":
+            data = self.dm.acled
+        elif dataset == "ucdp":
+            data = self.dm.ucdp
+
+        if column not in data.columns:
+            warnings.warn(f"{column} is not in the {dataset.upper()} dataset.")
+            return 
+
+        colors = ["#c22323", "#40ae3e", "#f47820", "#17498b", "pink", "gray"]
+        
+        if not clustering:
+            categories = sorted(data[column].unique())  
+            cmap = plt.get_cmap("tab10", len(categories))
+            
+            points = data.to_crs(config["crs"]).plot(
+                ax=ax,
+                cmap=cmap,
+                column=column,
+                legend=False,
+                markersize=8,
+                alpha=0.5,
+                lw=0
+            )
+                
+            handles = [
+                Line2D([0], [0], marker='o', color='w', markerfacecolor=cmap(index), markersize=10, label=label)
+                for index, label in enumerate(categories)
+            ]
+    
+            title = column.replace("_", " ").title()
+            legend = ax.legend(
+                handles=handles,
+                title=title,
+                loc="center left",
+                markerscale=0.75,
+                fontsize=config["legend_label_fontsize"],
+                title_fontsize=config["legend_title_fontsize"],
+                bbox_to_anchor=bbox_to_anchor,
+                bbox_transform=ax.figure.transFigure  
+            )
+            ax.add_artist(legend)
+
+        else:
+            # Source: https://stackoverflow.com/a/53094495/4777141
+
+            all_points, handles = [], []
+            global_index = 0
+            for category, color in zip(data[column].unique(), colors):
+                subdata = data[data[column] == category].copy()
+                subdata["lon"] = subdata.geometry.x
+                subdata["lat"] = subdata.geometry.y
+                subdata["group"] = None
+                coords = set([tuple(x) for x in subdata[["lat", "lon"]].values])
+                
+                clusters = []
+                while len(coords):
+                    locus = coords.pop()
+                    cluster = [x for x in coords if vincenty(locus, x) <= distance]
+                    clusters.append(cluster + [locus])
+                    for x in cluster:
+                        coords.remove(x)
+
+                lons, lats, groups = [], [], []
+                for cluster in clusters:
+                    centroid_x = MultiPoint(cluster).centroid.x
+                    centroid_y = MultiPoint(cluster).centroid.y
+                    centroid = (centroid_x, centroid_y)
+                    center_point = min(cluster, key=lambda point: vincenty(point, centroid))
+
+                    for point in cluster:
+                        condition = (subdata["lon"] == point[1]) & (subdata["lat"] == point[0])
+                        subdata.loc[condition, "group"] = global_index
+                        
+                    lons.append(center_point[1])
+                    lats.append(center_point[0])
+                    groups.append(global_index)
+                    global_index += 1
+          
+                points = pd.DataFrame({'lon': lons, 'lat': lats, 'group': groups})
+                points = gpd.GeoDataFrame(
+                    points, 
+                    geometry=gpd.points_from_xy(points["lon"], points['lat']), 
+                    crs="EPSG:4326"
+                )
+                points["color"] = color
+
+                handle = Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=10, label=category)
+                handles.append(handle)
+
+                counts = pd.DataFrame(subdata["group"].value_counts()).reset_index()
+                points = points.merge(counts, on="group")
+                all_points.append(points)
+            
+            all_points = gpd.GeoDataFrame(pd.concat(all_points), geometry="geometry")
+            all_points = all_points.sort_values(by='count', ascending=False)
+
+            max_count = all_points["count"].max()
+            all_points["count_scaled"] = all_points["count"] * markerscale
+
+            all_points.to_crs(config["crs"]).plot(
+                ax=ax,
+                facecolor=all_points["color"],
+                legend=False,
+                marker = "o",
+                markersize="count_scaled",
+                alpha=0.8,
+                lw=0.1
+            )
+            title = column.replace("_", " ").title()
+            legend1 = ax.legend(
+                handles=handles,
+                title=title,
+                loc="center left",
+                markerscale=0.75,
+                fontsize=config["legend_label_fontsize"],
+                title_fontsize=config["legend_title_fontsize"],
+                bbox_to_anchor=bbox_to_anchor,
+                bbox_transform=ax.figure.transFigure  
+            )
+            ax.add_artist(legend1)
+
+            lw = 0
+            legend_color = "silver"
+            mec="silver"
+
+            def custom_round(x):
+                if x < 100:
+                    return int((x // 50) * 50)
+                elif x < 1000:
+                    return int((x // 100) * 100)
+                else:
+                    return int((x // 500) * 500)
+
+            n = 1
+            legends = []
+            while n <= max_count:
+                legend = mlines.Line2D(
+                    [], [], 
+                    color=legend_color, 
+                    lw=lw, 
+                    marker="o", 
+                    mec=mec, 
+                    markeredgewidth=1, 
+                    markersize=np.sqrt(n * markerscale), 
+                    label=n
+                )
+                legends.append(legend)
+                if n < 100:           
+                    n *= 10
+                elif n < 500:         
+                    n = 500
+                else:                
+                    n += 500
+
+            # Force layout so we get the correct bbox
+            #ax.figure.canvas.draw()
+            #renderer = ax.figure.canvas.get_renderer()
+            
+            # Height of legend1 in axes fraction units
+            #gap = 0.01
+            #bb1 = legend1.get_window_extent(renderer).transformed(ax.figure.transFigure.inverted())
+
+            # Force draw to get sizes
+            ax.figure.canvas.draw()
+            renderer = ax.figure.canvas.get_renderer()
+            
+            # Get legend1 height in figure fraction
+            bb1 = legend1.get_window_extent(renderer).transformed(ax.figure.transFigure.inverted())
+            h1 = bb1.height
+            center1 = bb1.y0 + h1/2  # center y of legend1
+            
+            # Create legend2 temporarily to measure its height
+            legend2_temp = ax.legend(
+                handles=legends, 
+                title="Number of events",
+                markerscale=1, 
+                borderpad=1,
+                handletextpad=2,
+                loc="center left",
+                labelspacing=config["labelspacing"], 
+                fontsize=config["legend_label_fontsize"], 
+                title_fontsize=config["legend_label_fontsize"],
+                bbox_to_anchor=bbox_to_anchor,
+                bbox_transform=ax.figure.transFigure
+            )
+            ax.add_artist(legend2_temp)
+            ax.figure.canvas.draw()
+            bb2 = legend2_temp.get_window_extent(renderer).transformed(ax.figure.transFigure.inverted())
+            h2 = bb2.height
+            
+            # Compute new y-coordinate for legend2 so it sits exactly below legend1
+            new_y = center1 - (h1/2 + h2/2) - 0.01
+            
+            #bbox_to_anchor = [xpos, ypos - bb1.height - gap]  
+            bbox_to_anchor = [xpos, new_y]  
+            legend2_temp.remove()
+            legend2 = ax.legend(
+                handles=legends, 
+                title="Number of events",
+                markerscale=1, 
+                borderpad=1,
+                handletextpad=2,
+                loc="center left",
+                labelspacing=config["labelspacing"], 
+                fontsize=config["legend_label_fontsize"], 
+                title_fontsize=config["legend_label_fontsize"],
+                bbox_to_anchor=bbox_to_anchor,
+                bbox_transform=ax.figure.transFigure  
+            )
+            legend2._legend_box.sep = 5
+            ax.add_artist(legend2)
+                
+        return ax, xpos
     
             
     def plot_geoboundaries(
@@ -355,7 +620,8 @@ class GeoPlot:
         legend_title: str = None,
         annotation: str = None,
         group: str = 'group',
-        max_units: int = 50,
+        max_adms: int = 50,
+        max_groups: int = 20,
         kwargs: dict = None,
         key = "geoboundaries"
     ) -> matplotlib.axes.Axes:
@@ -410,14 +676,14 @@ class GeoPlot:
         if legend_title is None:
             legend_title = config["legend_title"]
 
-        legend_left = None
-        if group in data.columns:
+        xpos = 0
+        if group in data.columns: #and data[group].nunique < max_groups:
             cmap = ListedColormap(config["cmap"])
             edgecolor = config["edgecolor_with_group"]
             linewidth = config["linewidth_with_group"]
 
             # Plot grouped boundaries with color mapping and legend
-            data.dissolve(group).reset_index().plot(
+            data.dissolve(group).reset_index().to_crs(config["crs"]).plot(
                 group, 
                 ax=ax, 
                 cmap=cmap, 
@@ -447,17 +713,17 @@ class GeoPlot:
             fig.canvas.draw()
             bbox = legend.get_window_extent(fig.canvas.get_renderer())
             bbox_fig = bbox.transformed(fig.transFigure.inverted())
-            legend_left = bbox_fig.x0
+            xpos = bbox_fig.x0
         else:
             # No grouping: fallback style
             linewidth = config["linewidth_no_group"]
             edgecolor = config["edgecolor_no_group"]
 
         # Plot administrative boundaries
-        data_adm.plot(ax=ax, facecolor="none", edgecolor=edgecolor, lw=linewidth)
+        data_adm.to_crs(config["crs"]).plot(ax=ax, facecolor="none", edgecolor=edgecolor, lw=linewidth)
 
         # Add labels if number of units is below threshold
-        if len(data_adm) < max_units:
+        if len(data_adm) < max_adms:
             data_adm.apply(lambda x: ax.annotate(
                 text=x[adm_level].replace("(", "\n("), 
                 xy=x.geometry.centroid.coords[0], 
@@ -475,7 +741,7 @@ class GeoPlot:
         # Add dissolved country outline
         dissolved = data.dissolve("iso_code")
         dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
-        dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
+        dissolved.to_crs(config["crs"]).plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
 
         # Set default title and annotation if missing
         iso_code = data.iso_code.values[0]
@@ -492,10 +758,10 @@ class GeoPlot:
             annotation = self._get_annotation() + f"{annotation}\n"
 
         # Add titles and annotations with layout adjusted to legend
-        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
+        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=xpos)
         ax.axis("off")
         
-        return ax
+        return ax, xpos
 
 
     def plot_bivariate_choropleth(
@@ -705,7 +971,7 @@ class GeoPlot:
         # Determine left position of legend for alignment
         tight_bbox = ax2.get_tightbbox(fig.canvas.get_renderer())
         tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
-        legend_left = tight_bbox_fig.x0
+        xpos = tight_bbox_fig.x0
 
         # Build titles and annotations
         if var1_title is None:
@@ -723,7 +989,7 @@ class GeoPlot:
         if zoom_to is not None:
             subunit = ", ".join([value for value in zoom_to.values()])
             country = f"{subunit}, {country}"
-            self._plot_tiny_map(zoom_to, country, subunit, data, dissolved, fig, ax, ax2, config, x=legend_left)
+            self._plot_tiny_map(zoom_to, country, subunit, data, dissolved, fig, ax, ax2, config, x=xpos)
 
         # Helper to clean up duplicate words in titles
         def get_names(var1_title, var2_title, name: str, remove_from_latter: bool = True):
@@ -743,9 +1009,9 @@ class GeoPlot:
             title = config['title'].format(var1_title, var2_title, country)
 
         # Add titles and annotations with layout adjusted to legend
-        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
+        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=xpos)
         
-        return ax
+        return ax, xpos
                 
 
     def plot_choropleth(
@@ -855,7 +1121,7 @@ class GeoPlot:
             vmax = data[var].max()
 
         fig.canvas.draw()
-        legend_left = None
+        xpos = None
 
         # Handle case when all values are the same (single color map)
         if data[var].nunique() == 1:
@@ -899,7 +1165,7 @@ class GeoPlot:
             fig.canvas.draw()
             tight_bbox = legend.get_window_extent(fig.canvas.get_renderer())
             tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
-            legend_left = tight_bbox_fig.x0
+            xpos = tight_bbox_fig.x0
 
         elif config['legend_type'] == 'colorbar':
             # Plot using a continuous colorbar legend
@@ -917,6 +1183,20 @@ class GeoPlot:
 
             # Get colorbar axis and set titles, labels
             iax = fig.axes[1]
+
+            # Reposition colorbar depending on zoom
+            pos = iax.get_position()
+            cbar_width = pos.width
+            cbar_height = pos.height
+        
+            if zoom_to is not None:
+                cbar_y = ax.get_position().y0 + 0.5 * (ax.get_position().height - cbar_height) / 5
+            else:
+                cbar_y = ax.get_position().y0 + 2 * (ax.get_position().height - cbar_height) / 5
+        
+            cbar_x = pos.x0
+            iax.set_position([cbar_x, cbar_y, cbar_width, cbar_height])
+
             iax.tick_params(labelsize=config['legend_label_fontsize'])
             iax.set_title(
                 legend_title, 
@@ -927,7 +1207,7 @@ class GeoPlot:
             # Determine left position of legend for alignment
             tight_bbox = iax.get_tightbbox(fig.canvas.get_renderer())
             tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
-            legend_left = tight_bbox_fig.x0
+            xpos = tight_bbox_fig.x0
     
         elif config['legend_type'] == 'barplot':
             # Position inset axis for barplot relative to map axis
@@ -1042,7 +1322,7 @@ class GeoPlot:
             # Determine left position of legend for alignment
             tight_bbox = iax.get_tightbbox(fig.canvas.get_renderer())
             tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
-            legend_left = tight_bbox_fig.x0
+            xpos = tight_bbox_fig.x0
 
         # Plot boundaries (zoomed or full)
         if dissolved_zoomed is not None:
@@ -1070,22 +1350,22 @@ class GeoPlot:
         if zoom_to is not None:
             subunit = ", ".join([value for value in zoom_to.values()])
             country = f"{subunit}, {country}"
-            self._plot_tiny_map(zoom_to, country, subunit, data, dissolved, fig, ax, iax, config, x=legend_left)
+            self._plot_tiny_map(zoom_to, country, subunit, data, dissolved, fig, ax, iax, config, x=xpos)
 
         # Get title text
         if title is None:
             title = config['title'].format(var_title, country)
 
         # Add title, subtitle, and annotations
-        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=legend_left)
+        self._add_titles_and_annotations(fig, ax, config, title, subtitle, annotation, x=xpos)
         ax.axis("off")
         
-        return ax
+        return ax, xpos
 
     
     def _plot_missing(
         self, 
-        ax, 
+        ax: matplotlib.axes.Axes, 
         data_missing: gpd.GeoDataFrame, 
         config: dict
     ) -> matplotlib.axes.Axes:
@@ -1167,8 +1447,8 @@ class GeoPlot:
         data: gpd.GeoDataFrame,
         dissolved: gpd.GeoDataFrame,
         fig,
-        ax1,
-        ax2,
+        ax1: matplotlib.axes.Axes,
+        ax2: matplotlib.axes.Axes,
         config: dict,
         x: float
     ) -> None:
@@ -1258,7 +1538,7 @@ class GeoPlot:
     def _add_titles_and_annotations(
         self, 
         fig, 
-        ax, 
+        ax: matplotlib.axes.Axes, 
         config: dict,
         title: str,
         subtitle: str,
