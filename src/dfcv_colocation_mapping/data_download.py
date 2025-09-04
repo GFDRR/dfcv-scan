@@ -35,6 +35,13 @@ from dfcv_colocation_mapping import data_utils
 logging.basicConfig(level=logging.INFO, force=True)
 
 
+class DownloadProgressBar(tqdm):
+    def update_to(self, b=1, bsize=1, tsize=None):
+        if tsize is not None:
+            self.total = tsize
+        self.update(b * bsize - self.n)
+
+
 class DatasetManager:
     def __init__(
         self,
@@ -635,6 +642,10 @@ class DatasetManager:
             ucdp["country"] = ucdp["country"].apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x))
             ucdp["country"] = ucdp["country"].str.strip()
             ucdp = ucdp[ucdp["country"] == self.country.name]
+            
+            ucdp["date_start"] = pd.to_datetime(ucdp["date_start"])
+            ucdp = ucdp[ucdp["date_start"] >= self.conflict_start_date]
+            ucdp = ucdp[ucdp["date_start"] <= self.conflict_end_date]
 
             if len(ucdp) == 0:
                 logging.info(f"No UCDP data found for {self.iso_code}.")
@@ -643,12 +654,7 @@ class DatasetManager:
             ucdp = gpd.GeoDataFrame(
                 geometry=gpd.points_from_xy(ucdp["longitude"], ucdp["latitude"], crs=self.crs),
                 data=ucdp
-            )
-            
-            ucdp["date_start"] = pd.to_datetime(ucdp["date_start"])
-            ucdp = ucdp[ucdp["date_start"] >= self.conflict_start_date]
-            ucdp = ucdp[ucdp["date_start"] <= self.conflict_end_date]
-            
+            )            
             ucdp.to_file(local_file, driver="GeoJSON")            
             logging.info(f"Saving UCDP to {local_file}")
 
@@ -1179,6 +1185,13 @@ class DatasetManager:
         return agg
 
     
+    def _download_url_progress(self, url, output_path):
+        with DownloadProgressBar(
+            unit='B', unit_scale=True, miniters=1, desc=url.split('/')[-1]
+        ) as t:
+            urllib.request.urlretrieve(url, filename=output_path, reporthook=t.update_to)
+
+            
     def download_url(self, dataset: str, dataset_name: str = None, ext: str = "tif") -> str:
         """Download a dataset from a configured URL and save it locally.
 
@@ -1228,7 +1241,8 @@ class DatasetManager:
                     if url.endswith(".zip"):
                         self.download_zip(url, dataset, out_file=global_file, ext=ext)
                     elif url.endswith(".tif"):
-                        urllib.request.urlretrieve(url, global_file)
+                        #urllib.request.urlretrieve(url, global_file)
+                        self._download_url_progress(url, global_file)
                 except Exception as e:
                     raise RuntimeError(f"Failed to download {dataset} from {url}: {e}")
 
@@ -1246,7 +1260,8 @@ class DatasetManager:
                 if url.endswith(".zip"):
                     self.download_zip(url, dataset, out_file=local_file, ext=ext)
                 if url.endswith(".tif"):
-                    urllib.request.urlretrieve(url, local_file)
+                    #urllib.request.urlretrieve(url, local_file)
+                    self._download_url_progress(url, local_file)
     
         return local_file
 
@@ -1277,7 +1292,8 @@ class DatasetManager:
 
         # Download and extract ZIP if not already done
         if not os.path.exists(zip_file) and not os.path.exists(zip_dir):
-            urllib.request.urlretrieve(url, zip_file)
+            #urllib.request.urlretrieve(url, zip_file)
+            self._download_url_progress(url, zip_file)
             with zipfile.ZipFile(zip_file, "r") as zip_ref:
                 zip_ref.extractall(zip_dir)
             os.remove(zip_file)
@@ -1345,7 +1361,8 @@ class DatasetManager:
         for link in tqdm(links, total=len(links)):          
             out_file = os.path.join(out_dir, link)
             if not os.path.exists(out_file):
-                urllib.request.urlretrieve(url+link, out_file)
+                #urllib.request.urlretrieve(url+link, out_file)
+                self._download_url_progress(url+link, out_file)
         
         vrt_file = os.path.join(self.global_dir, f"{name.upper()}.vrt")
         global_file = os.path.join(self.global_dir, f"{name.upper()}.tif")
