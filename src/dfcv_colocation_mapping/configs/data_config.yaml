@@ -14,9 +14,8 @@ threshold:
     global_earthquake: 0.18
     global_landslide: 3
     global_cyclone: 80
-    global_drought: -1
-    # https://www.weather.gov/ffc/hichart
-    global_heat_stress: 32
+    global_drought: -1 
+    global_heat_stress: 32 # https://www.weather.gov/ffc/hichart
     global_fluvial_flood: 0.50
     coastal_defended: 50
     pluvial_defended: 50
