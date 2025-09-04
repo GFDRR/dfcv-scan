@@ -16,6 +16,24 @@ from shapely.geometry import Polygon, MultiPolygon
 logging.basicConfig(level=logging.INFO)
 
 
+def get_conflict_source(conflict_exposure_source):
+  if conflict_exposure_source == "ACLED (population_best)":
+      return "acled"
+  elif conflict_exposure_source == "ACLED (WBG calculation)":
+      return f"wbg_acled_{dm.asset}"
+  elif conflict_exposure_source == "UCDP":
+      return f"ucdp_{dm.asset}"
+
+
+def get_exposure(exposure):
+  if exposure == "absolute":
+      return "exposure"
+  elif exposure == "relative":
+      return "exposure_relative"
+  elif exposure == "intensity_weighted_relative":
+      return "intensity_weighted_exposure_relative"
+
+
 def _minmax_scale(data: pd.Series) -> pd.Series:
     """
     Performs Min-Max scaling on a NumPy array or Pandas Series, scaling values to [0, 1].
