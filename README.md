@@ -150,7 +150,7 @@ geoplot.plot_bivariate_choropleth(
 - [Global Model of Cyclone Wind (100-year RP)](https://data.humdata.org/dataset/cyclone-wind-100-years-return-period)
 - [Standardized Precipitation and Evapotranspiration Index (SPEI)](https://www.drought.gov/data-download)
 - [Flood Hazard Map of the World (100-year RP)](https://data.jrc.ec.europa.eu/dataset/jrc-floods-floodmapgl_rp100y-tif)
-- [GloUTCI-M: A Global monthly 1 km Universal Thermal Climate Index](https://zenodo.org/record/8310513) 
+- [GloUTCI-M: A Global monthly 1 km Universal Thermal Climate Index](https://zenodo.org/records/8310513) 
 
 
 
