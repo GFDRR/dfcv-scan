@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dfcv_colocation_mapping"
-version = "0.3.4"
+version = "0.3.5"
 authors = [
   { name="Isabelle Tingzon"},
 ]
@@ -38,7 +38,8 @@ dependencies = [
     "requests == 2.32.3",
     "seaborn == 0.13.2",
     "shapely == 2.0.7",
-    "importlib_resources == 6.5.2"
+    "importlib_resources == 6.5.2",
+    "vincenty==0.1.4"
 ]
 
 [tool.setuptools]
