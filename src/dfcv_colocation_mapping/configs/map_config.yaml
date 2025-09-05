@@ -12,7 +12,7 @@ choropleth:
     title_fontsize: 15
     subtitle_fontsize: 10
     subtitle_gap: 0.005
-    annotation_fontsize: 6
+    annotation_fontsize: 7
     annotation_gap: 0.01
     annotation_color: "#909090"
     
@@ -126,7 +126,7 @@ geoboundaries:
     title_fontsize: 15
     subtitle_fontsize: 10
     subtitle_gap: 0.005
-    annotation_fontsize: 6
+    annotation_fontsize: 7
     annotation_gap: 0.01
     annotation_color: "#909090"
 
@@ -166,7 +166,7 @@ raster:
     title_fontsize: 13
     subtitle_fontsize: 10
     subtitle_gap: 0.005
-    annotation_fontsize: 6
+    annotation_fontsize: 7
     annotation_gap: 0.01
     annotation_color: "#909090"
 

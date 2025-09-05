@@ -65,4 +65,3 @@ urls:
     global_fluvial_flood_v1_url: "https://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/FLOODS/GlobalMaps/floodMapGL_rp100y.zip"
     # Source: https://data.jrc.ec.europa.eu/dataset/jrc-floods-floodmapgl_rp50y-tif
     global_fluvial_flood_v2_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/RP{}/"
-    
