@@ -405,19 +405,18 @@ class GeoPlot:
             warnings.warn(f"{column} is not in the {dataset.upper()} dataset.")
             return 
 
-        colors = ["#c22323", "#40ae3e", "#f47820", "#17498b", "pink", "gray"]
+        categories = sorted(data[column].unique())  
+        cmap = plt.get_cmap("Dark2", len(categories))
+        colors = cmap.colors
         
-        if not clustering:
-            categories = sorted(data[column].unique())  
-            cmap = plt.get_cmap("tab10", len(categories))
-            
+        if not clustering:            
             points = data.to_crs(config["crs"]).plot(
                 ax=ax,
                 cmap=cmap,
                 column=column,
                 legend=False,
                 markersize=8,
-                alpha=0.5,
+                alpha=0.8,
                 lw=0
             )
                 
@@ -441,10 +440,10 @@ class GeoPlot:
 
         else:
             # Source: https://stackoverflow.com/a/53094495/4777141
-
             all_points, handles = [], []
             global_index = 0
             for category, color in zip(data[column].unique(), colors):
+                color = matplotlib.colors.rgb2hex(color)
                 subdata = data[data[column] == category].copy()
                 subdata["lon"] = subdata.geometry.x
                 subdata["lat"] = subdata.geometry.y
@@ -614,6 +613,7 @@ class GeoPlot:
         group: str = 'group',
         max_adms: int = 50,
         max_groups: int = 20,
+        show_adm_names: bool = True,
         kwargs: dict = None,
         key = "geoboundaries"
     ) -> matplotlib.axes.Axes:
@@ -715,7 +715,7 @@ class GeoPlot:
         data_adm.to_crs(config["crs"]).plot(ax=ax, facecolor="none", edgecolor=edgecolor, lw=linewidth)
 
         # Add labels if number of units is below threshold
-        if len(data_adm) < max_adms:
+        if len(data_adm) < max_adms and show_adm_names is True:
             data_adm.to_crs(config["crs"]).apply(lambda x: ax.annotate(
                 text=x[adm_level].replace("(", "\n("), 
                 xy=x.geometry.centroid.coords[0], 
@@ -1180,8 +1180,13 @@ class GeoPlot:
             pos = iax.get_position()
             cbar_width = pos.width
             cbar_height = pos.height
-        
-            if zoom_to is not None:
+
+            if "legend_x" in config:
+                cbar_x = config["legend_x"]
+                
+            if "legend_y" in config:
+                cbar_y = config["legend_y"]
+            elif zoom_to is not None:
                 cbar_y = ax.get_position().y0 + 0.5 * (ax.get_position().height - cbar_height) / 5
             else:
                 cbar_y = ax.get_position().y0 + 2 * (ax.get_position().height - cbar_height) / 5
