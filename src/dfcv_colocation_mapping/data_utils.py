@@ -16,7 +16,7 @@ from shapely.geometry import Polygon, MultiPolygon
 logging.basicConfig(level=logging.INFO)
 
 
-def get_conflict_source(conflict_exposure_source):
+def get_conflict_source(dm, conflict_exposure_source):
   if conflict_exposure_source == "ACLED (population_best)":
       return "acled"
   elif conflict_exposure_source == "ACLED (WBG calculation)":
@@ -25,7 +25,7 @@ def get_conflict_source(conflict_exposure_source):
       return f"ucdp_{dm.asset}"
 
 
-def get_exposure(exposure):
+def get_exposure(dm, exposure):
   if exposure == "absolute":
       return "exposure"
   elif exposure == "relative":
