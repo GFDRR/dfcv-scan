@@ -705,9 +705,23 @@ class DatasetManager:
                 event_count = data_utils._merge_data(
                     [admin, event_count], columns=[f"{self.adm_level}_ID"], how="left"
                 )
-                ucdp = data_utils._merge_data(
-                    [event_count, ucdp_agg], columns=self.merge_columns
+
+                fatalities_count = self._aggregate_data(
+                    ucdp, agg_col="best", agg_func="sum"
                 )
+                fatalities_count = fatalities_count.rename(
+                    columns={"best": f"ucdp_fatalities"}
+                )
+                fatalities_count = data_utils._merge_data(
+                    [admin, fatalities_count], columns=[f"{self.adm_level}_ID"], how="left"
+                )
+                
+                ucdp = data_utils._merge_data(
+                    [event_count, fatalities_count, ucdp_agg], columns=self.merge_columns
+                )
+
+                agg = self._calculate_conflict_stats(ucdp, source="ucdp")
+                
                 ucdp.to_file(exposure_vector)
 
             ucdp = gpd.read_file(exposure_vector)
@@ -1155,6 +1169,14 @@ class DatasetManager:
             columns={"conflict_count": "acled_conflict_count"}
         )
 
+        # Aggregate total conflict events
+        fatalities_count = self._aggregate_data(
+            agg, agg_col="fatalities", agg_func="sum"
+        )
+        fatalities_count = fatalities_count.rename(
+            columns={"fatalities": "acled_fatalities"}
+        )
+
         # Aggregate conflict events where population_best is missing
         null_pop_event_count = self._aggregate_data(
             agg[agg["population_best"].isna()],
@@ -1167,7 +1189,7 @@ class DatasetManager:
 
         # Merge all aggregated data with admin boundaries
         agg = data_utils._merge_data(
-            [admin, pop_sum, event_count, null_pop_event_count],
+            [admin, pop_sum, event_count, fatalities_count, null_pop_event_count],
             columns=[f"{self.adm_level}_ID"],
             how="left",
         )
@@ -1179,11 +1201,22 @@ class DatasetManager:
         )
         agg.loc[agg[exposure_var] == 0, exposure_var] = None
 
+        agg = self._calculate_conflict_stats(agg, source="acled")
+        
+
         # Save aggregated GeoDataFrame to file
         agg.to_file(agg_file)
             
         return agg
 
+
+    def _calculate_conflict_stats(self, data, source: str = "acled"):
+        data[f"{source}_fatalities_per_conflict"] = data[f"{source}_fatalities"].div(data[f"{source}_conflict_count"])
+        data[f"{source}_fatalities_per_conflict"] = data[f"{source}_fatalities_per_conflict"].replace([np.inf, -np.inf], np.nan)
+
+        return data
+
+        
     
     def _download_url_progress(self, url, output_path):
         with DownloadProgressBar(
@@ -1801,6 +1834,7 @@ class DatasetManager:
             agg = data.groupby([agg_name], dropna=False).size().reset_index()
         else:
             # Apply specified aggregation function to agg_col
+            data[agg_col] = data[agg_col].astype(float)
             agg = (
                 data.groupby([agg_name], dropna=False)
                 .agg({agg_col: agg_func})
