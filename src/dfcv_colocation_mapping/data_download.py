@@ -374,7 +374,6 @@ class DatasetManager:
         
         return data
 
-
     def calculate_multihazard_score(
         self,
         data: gpd.GeoDataFrame,
@@ -421,51 +420,61 @@ class DatasetManager:
         # Loop through each suffix to calculate MHS
         for suffix in suffixes:
             # Prepare hazard columns and normalized weights
-            hazard_cols = [
-                f"{hazard}_{self.asset}_{suffix}" if suffix else hazard
-                for hazard in self.config["hazards"].keys()
-                if (f"{hazard}_{self.asset}_{suffix}" if suffix else hazard) in data.columns
-            ]
-            
-            total_weight = sum(list(self.config["hazards"].values()))
-            weights = np.array([
-                self.config["hazards"][hazard] 
-                for hazard in self.config["hazards"]
-            ])
-            if total_weight > 0:
-                weights = weights / total_weight
-            
-            # Select only columns that exist in data
-            hazard_cols = [col for col in hazard_cols if col in data.columns]
-            weights = weights[:len(hazard_cols)]  
-            
-            # Compute MHS using vectorized operations
-            if self.mhs_aggregation == "power_mean":
-                mhs = (data[hazard_cols] ** p).multiply(weights, axis=1).sum(axis=1) ** (1 / p)
-            
-            elif self.mhs_aggregation == "geometric_mean":
-                mhs = (data[hazard_cols] + epsilon).pow(weights).prod(axis=1)
-            
-            elif self.mhs_aggregation == "arithmetic_mean":
-                mhs = data[hazard_cols].multiply(weights, axis=1).sum(axis=1)
+            hazard_dicts, categories = [], list(self.config["hazards"].keys())
+            for category in categories:
+                hazard_dicts.append(self.config["hazards"][category])
 
-            # Add MHS column (scaled 0-1)
-            mhs_name = "mhs"
-            if suffix is not None:
-                mhs_name = f"{mhs_name}_{self.asset}_{suffix}"
-            data[mhs_name] = data_utils._minmax_scale(mhs)
+            from functools import reduce
+            all_hazards = reduce(lambda a, b: {**a, **b}, hazard_dicts)
+            hazard_dicts.append(all_hazards)
+            categories.append("all")
 
-            # Optionally scale MHS by conflict
-            for conflict_column in conflict_columns:
-                mhsc_name = f"mhs_{conflict_column}"
+            for hazard_dict, category in zip(hazard_dicts, categories):
+                hazard_cols = [
+                    f"{hazard}_{self.asset}_{suffix}" if suffix else hazard
+                    for hazard in hazard_dict
+                    if (f"{hazard}_{self.asset}_{suffix}" if suffix else hazard) in data.columns
+                ]
                 
+                total_weight = sum(list(hazard_dict.values()))
+                weights = np.array([
+                    hazard_dict[hazard] 
+                    for hazard in hazard_dict
+                ])
+                if total_weight > 0:
+                    weights = weights / total_weight
+                
+                # Select only columns that exist in data
+                hazard_cols = [col for col in hazard_cols if col in data.columns]
+                weights = weights[:len(hazard_cols)]  
+                
+                # Compute MHS using vectorized operations
+                if self.mhs_aggregation == "power_mean":
+                    mhs = (data[hazard_cols] ** p).multiply(weights, axis=1).sum(axis=1) ** (1 / p)
+                
+                elif self.mhs_aggregation == "geometric_mean":
+                    mhs = (data[hazard_cols] + epsilon).pow(weights).prod(axis=1)
+                
+                elif self.mhs_aggregation == "arithmetic_mean":
+                    mhs = data[hazard_cols].multiply(weights, axis=1).sum(axis=1)
+    
+                # Add MHS column (scaled 0-1)
+                mhs_name = "mhs"
                 if suffix is not None:
-                    mhsc_name = f"{mhsc_name}_{self.asset}_{suffix}"
-
-                for csuffix in suffixes:
-                    if f"{conflict_column}_{self.asset}_{csuffix}" in data.columns:
-                        conflict_scaled = data_utils._minmax_scale(data[f"{conflict_column}_{self.asset}_{csuffix}"])
-                        data[mhsc_name] = data[mhs_name] * conflict_scaled
+                    mhs_name = f"{mhs_name}_{category}_{self.asset}_{suffix}"
+                data[mhs_name] = data_utils._minmax_scale(mhs)
+    
+                # Optionally scale MHS by conflict
+                for conflict_column in conflict_columns:
+                    mhsc_name = f"mhs_{category}_{conflict_column}"
+                    
+                    if suffix is not None:
+                        mhsc_name = f"{mhsc_name}_{self.asset}_{suffix}"
+    
+                    for csuffix in suffixes:
+                        if f"{conflict_column}_{self.asset}_{csuffix}" in data.columns:
+                            conflict_scaled = data_utils._minmax_scale(data[f"{conflict_column}_{self.asset}_{csuffix}"])
+                            data[mhsc_name] = data[mhs_name] * conflict_scaled
     
         return data
 
@@ -647,6 +656,13 @@ class DatasetManager:
             ucdp = ucdp[ucdp["date_start"] >= self.conflict_start_date]
             ucdp = ucdp[ucdp["date_start"] <= self.conflict_end_date]
 
+            type_of_violence_map = {
+                1: "State-based conflict",
+                2: "Non-state conflict",
+                3: "One-sided violence"
+            }
+            ucdp['type_of_violence'] = ucdp['type_of_violence'].replace(type_of_violence_map)
+
             if len(ucdp) == 0:
                 logging.info(f"No UCDP data found for {self.iso_code}.")
                 return 
@@ -821,6 +837,14 @@ class DatasetManager:
                     "Political violence; Demonstrations": "Demonstrations",
                 }
             )
+
+            data["type_of_violence"] = None
+            data["civilian_targeting"] = data["civilian_targeting"].replace("", None)
+            data.loc[data["civilian_targeting"] == "Civilian targeting", "type_of_violence"] = "One-sided violence"
+            data.loc[data["inter1"].str.contains("Civilians") | data["inter2"].str.contains("Civilians"), "type_of_violence"] = "One-sided violence"
+            data.loc[data["inter1"].str.contains("State") | data["inter2"].str.contains("State"), "type_of_violence"] = "State-based conflict"
+            data["type_of_violence"] = data["type_of_violence"].fillna("Non-state conflict")
+            data[["type_of_violence", "civilian_targeting", "inter1", "inter2"]][data["type_of_violence"] == "State-based conflict"]
 
             # Save to file
             data.to_file(out_file)
