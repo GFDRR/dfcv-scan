@@ -6,15 +6,12 @@ hazards:
         pluvial_defended: 1
         coastal_defended: 1
         drought: 1
-
     atmospheric:
         cyclone: 1
         heat_stress: 1
-
     geophysical:
         landslide: 1
         earthquake: 1
-
     biophysical:
         wildfire: 1
     
