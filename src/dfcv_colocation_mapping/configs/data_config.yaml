@@ -1,20 +1,29 @@
 hazards:
-    earthquake: 1
-    landslide: 1
-    cyclone: 1
-    drought: 1
-    heat_stress: 1
-    fluvial_flood: 1
-    fluvial_defended: 1
-    pluvial_defended: 1
-    coastal_defended: 1
+    # https://pmc.ncbi.nlm.nih.gov/articles/PMC7123175/
+    hydrological:
+        fluvial_flood: 1
+        fluvial_defended: 1
+        pluvial_defended: 1
+        coastal_defended: 1
+        drought: 1
 
+    atmospheric:
+        cyclone: 1
+        heat_stress: 1
+
+    geophysical:
+        landslide: 1
+        earthquake: 1
+
+    biophysical:
+        wildfire: 1
+    
 threshold:
-    # https://dc.engconfintl.org/cgi/viewcontent.cgi?article=1015&context=geohazards
-    global_earthquake: 0.18
+    global_earthquake: 0.18 # https://dc.engconfintl.org/cgi/viewcontent.cgi?article=1015&context=geohazards
     global_landslide: 3
     global_cyclone: 80
     global_drought: -1 
+    global_wildfire: 11.2 # https://gwis.jrc.ec.europa.eu/about-gwis/technical-background/fire-danger-forecast
     global_heat_stress: 32 # https://www.weather.gov/ffc/hichart
     global_fluvial_flood: 0.50
     coastal_defended: 50
@@ -37,6 +46,7 @@ hazard_data:
     - 'global_drought'
     - 'global_heat_stress'
     - 'global_fluvial_flood'
+    - 'global_wildfire'
 
 urls: 
     # Source: https://acleddata.com/
@@ -65,3 +75,5 @@ urls:
     global_fluvial_flood_v1_url: "https://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/FLOODS/GlobalMaps/floodMapGL_rp100y.zip"
     # Source: https://data.jrc.ec.europa.eu/dataset/jrc-floods-floodmapgl_rp50y-tif
     global_fluvial_flood_v2_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/RP{}/"
+    # Source: https://gwis.jrc.ec.europa.eu/applications/data-and-services
+    global_wildfire_url: "https://maps.effis.emergency.copernicus.eu/gwis?LAYERS=nasa_geos5.fwi&FORMAT=image/tiff&TRANSPARENT=true&SINGLETILE=false&SERVICE=wms&VERSION=1.1.1&REQUEST=GetMap&STYLES=&SRS=EPSG:4326&BBOX=-180.15625,-58.125,179.84375,75.125&WIDTH=1152&HEIGHT=533&TIME=2025-09-09.tif"
