@@ -341,7 +341,8 @@ class GeoPlot:
         dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none");
         
         if title is None:
-            country = pycountry.countries.get(alpha_3=iso_code).name
+            #country = pycountry.countries.get(alpha_3=iso_code).name
+            country = self.dm.country
             var_title = self._get_title(raster_name, "var_titles").title()
             title = config['title'].format(var_title, country)
         if annotation is None:
@@ -749,7 +750,7 @@ class GeoPlot:
             legend_title = config["legend_title"]
 
         xpos = 0
-        if group in data.columns and data[group].nunique < max_groups:
+        if group in data.columns and data[group].nunique() < max_groups:
             cmap = ListedColormap(config["cmap"])
             edgecolor = config["edgecolor_with_group"]
             linewidth = config["linewidth_with_group"]
@@ -817,7 +818,8 @@ class GeoPlot:
 
         # Set default title and annotation if missing
         iso_code = data.iso_code.values[0]
-        country = pycountry.countries.get(alpha_3=iso_code).name
+        countr = self.dm.country
+        #country = pycountry.countries.get(alpha_3=iso_code).name
 
         # Get title text
         if title is None:
@@ -1054,8 +1056,9 @@ class GeoPlot:
             annotation = self._get_annotation([var1, var2])
         else:
             annotation = self._get_annotation([var1, var2]) + f"{annotation}\n"
-            
-        country = pycountry.countries.get(alpha_3=iso_code).name
+
+        country = self.dm.country
+        #country = pycountry.countries.get(alpha_3=iso_code).name
 
         # If zoomed, adjust titles and add tiny map
         if zoom_to is not None:
@@ -1423,7 +1426,8 @@ class GeoPlot:
             annotation = self._get_annotation([var]) + f"{annotation}\n"
 
         # Plot tiny map
-        country = pycountry.countries.get(alpha_3=iso_code).name
+        country = self.dm.country
+        #country = pycountry.countries.get(alpha_3=iso_code).name
         if zoom_to is not None:
             subunit = ", ".join([value for value in zoom_to.values()])
             country = f"{subunit}, {country}"
@@ -1743,7 +1747,7 @@ class GeoPlot:
                     var = var.replace("_" + self.dm.asset, "")
                     var = var.replace(self.dm.asset, "")
                 if "acled" in var or 'ucdp' in var:
-                    return title.format("conflict")
+                    return title.format("conflict") 
                 elif "mhs" in var:
                     return title.format("multi-hazard")
                 else:
