@@ -150,7 +150,9 @@ class DatasetManager:
         self.jrc_version = jrc_version
 
         # Get country name from ISO Code
-        self.country = pycountry.countries.get(alpha_3=self.iso_code)
+        self.country = pycountry.countries.get(alpha_3=self.iso_code).name
+        if self.iso_code == "COD": # Edge case
+            self.country = "Democratic Republic of Congo"
         if self.country is None:
             raise ValueError(f"Invalid ISO code: {self.iso_code}")
 
@@ -650,8 +652,12 @@ class DatasetManager:
             ucdp = pd.read_csv(global_file, low_memory=False)
             ucdp["country"] = ucdp["country"].apply(lambda x: re.sub(r'\s*\([^)]*\)', '', x))
             ucdp["country"] = ucdp["country"].str.strip()
-            ucdp = ucdp[ucdp["country"] == self.country.name]
-            
+
+            country = self.country
+            if self.iso_code == "COD":
+                country = "DR Congo"
+
+            ucdp = ucdp[ucdp["country"] == country]
             ucdp["date_start"] = pd.to_datetime(ucdp["date_start"])
             ucdp = ucdp[ucdp["date_start"] >= self.conflict_start_date]
             ucdp = ucdp[ucdp["date_start"] <= self.conflict_end_date]
@@ -790,7 +796,7 @@ class DatasetManager:
             params = dict(
                 key=self.acled_key,
                 email=self.acled_email,
-                country=self.country.name,
+                country=self.country,
                 event_date=f"{self.conflict_start_date}|{self.conflict_end_date}",
                 event_date_where="BETWEEN",
                 population=population,
