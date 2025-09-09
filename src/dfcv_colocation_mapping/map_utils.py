@@ -362,7 +362,6 @@ class GeoPlot:
         dataset: str = "acled",
         ax: matplotlib.axes.Axes = None,
         xpos: float = None,
-        markerscale: float = 1,
         clustering: bool = True,
         distance: int = 50,
         kwargs: dict = None,
@@ -405,8 +404,9 @@ class GeoPlot:
             warnings.warn(f"{column} is not in the {dataset.upper()} dataset.")
             return 
 
+        markerscale = config["markerscale"]
         categories = sorted(data[column].unique())  
-        cmap = plt.get_cmap("Dark2", len(categories))
+        cmap = plt.get_cmap(config["cmap"], len(categories))
         colors = cmap.colors
         
         if not clustering:            
@@ -416,7 +416,7 @@ class GeoPlot:
                 column=column,
                 legend=False,
                 markersize=8,
-                alpha=0.8,
+                alpha=config["alpha"],
                 lw=0
             )
                 
@@ -501,7 +501,7 @@ class GeoPlot:
                 legend=False,
                 marker = "o",
                 markersize="count_scaled",
-                alpha=0.8,
+                alpha=config["alpha"],
                 lw=0.1
             )
             title = column.replace("_", " ").title()
@@ -521,34 +521,64 @@ class GeoPlot:
             legend_color = "silver"
             mec="silver"
 
-            def custom_round(x):
-                if x < 100:
-                    return int((x // 50) * 50)
-                elif x < 1000:
-                    return int((x // 100) * 100)
-                else:
-                    return int((x // 500) * 500)
+            import math
 
-            n = 1
+            def nice_round(x):
+                if x <= 10:
+                    return 10
+                elif x <= 50:
+                    return math.ceil(x / 10) * 10
+                elif x <= 100:
+                    return math.ceil(x / 50) * 50
+                elif x <= 500:
+                    return math.ceil(x / 100) * 100
+                elif x <= 1000:
+                    return math.ceil(x / 500) * 500
+                else:
+                    return math.ceil(x / 1000) * 1000
+            
+            def make_legend_ticks(max_count):
+                """Generate legend ticks starting at 5/10, ending at rounded max, with all intermediate nice multiples."""
+                # min value
+                min_val = 5 if max_count <= 20 else 10
+                
+                # max rounded nicely
+                max_val = nice_round(max_count)
+                                
+                # pick only those <= max_val
+                if max_val >= 1000:
+                    nice_values = [10, 100, 500, 1000, 5000, 10000, 50000, 100000]
+                    multiples = [v for v in nice_values if v < max_val]
+                else:
+                    nice_values = [10, 50, 100, 500, 1000]
+                    multiples = [v for v in nice_values if v < max_val]
+                
+                
+                # include min, all multiples, then max
+                ticks = [min_val] + multiples + [max_val]
+                
+                # ensure at least 3 ticks
+                if len(ticks) < 3:
+                    mid = (min_val + max_val) // 2
+                    ticks.insert(1, nice_round(mid))
+                
+                return ticks
+            
+            ticks = make_legend_ticks(max_count)
+            
             legends = []
-            while n <= max_count:
+            for n in ticks:
                 legend = mlines.Line2D(
-                    [], [], 
-                    color=legend_color, 
-                    lw=lw, 
-                    marker="o", 
-                    mec=mec, 
-                    markeredgewidth=1, 
-                    markersize=np.sqrt(n * markerscale), 
+                    [], [],
+                    color=legend_color,
+                    lw=lw,
+                    marker="o",
+                    mec=mec,
+                    markeredgewidth=1,
+                    markersize=np.sqrt(n * markerscale),
                     label=n
                 )
                 legends.append(legend)
-                if n < 100:           
-                    n *= 10
-                elif n < 500:         
-                    n = 500
-                else:                
-                    n += 500
 
             # Force draw to get sizes
             ax.figure.canvas.draw()
@@ -558,46 +588,96 @@ class GeoPlot:
             bb1 = legend1.get_window_extent(renderer).transformed(ax.figure.transFigure.inverted())
             h1 = bb1.height
             center1 = bb1.y0 + h1/2  # center y of legend1
+
+            from matplotlib.patches import Circle
+            from matplotlib.legend_handler import HandlerPatch
             
+            class HandlerStackedCircles(HandlerPatch):
+                def __init__(self, sizes, labels, title="Number of events", color="silver", **kwargs):
+                    super().__init__(**kwargs)
+                    self.sizes = sizes    
+                    self.labels = labels  
+                    self.title = title
+                    self.color = color
+            
+                def create_artists(
+                    self, legend, orig_handle, xdescent, ydescent, width, height, fontsize, trans
+                ):
+                    artists = []
+                    max_r = max(self.sizes) / 2
+                    center_x = width / 2 - xdescent
+                    bottom_y = height / 2 - ydescent - max_r  # align bottoms
+            
+                    label_x = center_x + max_r + 5
+            
+                    for s, lbl in sorted(zip(self.sizes, self.labels), reverse=True):
+                        r = s / 2
+                        c = Circle((center_x, bottom_y + r), radius=r,
+                                   facecolor="none", edgecolor=self.color, lw=1)
+                        c.set_transform(trans)
+                        artists.append(c)
+            
+                        # Text label
+                        t = plt.Text(x=label_x,
+                                     y=bottom_y + 1.85*r,   # top of circle
+                                     text=str(lbl),
+                                     va="center_baseline", ha="left",
+                                     fontsize=fontsize)
+                        t.set_transform(trans)
+                        artists.append(t)
+            
+                    # -Add title to the top
+                    title_y = bottom_y + 2*max_r + fontsize  # a bit above largest circle
+                    title = plt.Text(x=center_x,
+                                     y=title_y,
+                                     text=self.title,
+                                     va="bottom", ha="center",
+                                     fontsize=fontsize, fontweight="bold")
+                    title.set_transform(trans)
+                    artists.append(title)
+            
+                    return artists
+            
+            
+            def get_legend2(legends):
+                sizes = [h.get_markersize() for h in legends]
+                labels = [h.get_label() for h in legends]
+            
+                dummy = Circle((0, 0), radius=1)
+            
+                return ax.legend(
+                    [dummy],
+                    [""],  # suppress normal text, we draw title ourselves
+                    handler_map={Circle: HandlerStackedCircles(
+                        sizes=sizes,
+                        labels=labels,
+                        title="Number of events",
+                        color="silver"
+                    )},
+                    loc="center left",
+                    frameon=False,
+                    borderpad=1,
+                    handletextpad=2,
+                    labelspacing=config["labelspacing"],
+                    fontsize=config["legend_label_fontsize"],
+                    bbox_to_anchor=bbox_to_anchor,
+                    bbox_transform=ax.figure.transFigure
+                )
+                
             # Create legend2 temporarily to measure its height
-            legend2_temp = ax.legend(
-                handles=legends, 
-                title="Number of events",
-                markerscale=1, 
-                borderpad=1,
-                handletextpad=2,
-                loc="center left",
-                labelspacing=config["labelspacing"], 
-                fontsize=config["legend_label_fontsize"], 
-                title_fontsize=config["legend_label_fontsize"],
-                bbox_to_anchor=bbox_to_anchor,
-                bbox_transform=ax.figure.transFigure
-            )
+            legend2_temp = get_legend2(legends)
             ax.add_artist(legend2_temp)
             ax.figure.canvas.draw()
             bb2 = legend2_temp.get_window_extent(renderer).transformed(ax.figure.transFigure.inverted())
             h2 = bb2.height
             
             # Compute new y-coordinate for legend2 so it sits exactly below legend1
-            new_y = center1 - (h1/2 + h2/2) - 0.01
+            new_y = center1 - (h1/2 + h2/2) - 0.05
             
             #bbox_to_anchor = [xpos, ypos - bb1.height - gap]  
-            bbox_to_anchor = [xpos, new_y]  
+            bbox_to_anchor = [xpos + 0.025, new_y]  
             legend2_temp.remove()
-            legend2 = ax.legend(
-                handles=legends, 
-                title="Number of events",
-                markerscale=1, 
-                borderpad=1,
-                handletextpad=2,
-                loc="center left",
-                labelspacing=config["labelspacing"], 
-                fontsize=config["legend_label_fontsize"], 
-                title_fontsize=config["legend_label_fontsize"],
-                bbox_to_anchor=bbox_to_anchor,
-                bbox_transform=ax.figure.transFigure  
-            )
-            legend2._legend_box.sep = 5
+            legend2 = get_legend2(legends)
             ax.add_artist(legend2)
                 
         return ax, xpos
@@ -612,7 +692,7 @@ class GeoPlot:
         annotation: str = None,
         group: str = 'group',
         max_adms: int = 50,
-        max_groups: int = 20,
+        max_groups: int = 30,
         show_adm_names: bool = True,
         kwargs: dict = None,
         key = "geoboundaries"
@@ -669,7 +749,7 @@ class GeoPlot:
             legend_title = config["legend_title"]
 
         xpos = 0
-        if group in data.columns: #and data[group].nunique < max_groups:
+        if group in data.columns and data[group].nunique < max_groups:
             cmap = ListedColormap(config["cmap"])
             edgecolor = config["edgecolor_with_group"]
             linewidth = config["linewidth_with_group"]
@@ -1077,7 +1157,7 @@ class GeoPlot:
         if config['create_cmap']:
             cmap = pypalettes.create_cmap(colors=config['colormap'], cmap_type=config['cmap_type'])
         else:
-            cmap = pypalettes.load_cmap(config['palette_name'], cmap_type=config['cmap_type'])
+            cmap = pypalettes.load_cmap(config['cmap'], cmap_type=config['cmap_type'])
 
         # Dissolve geometries for plotting boundaries
         dissolved = data.dissolve("iso_code")
