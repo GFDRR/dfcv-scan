@@ -1,0 +1,33 @@
+keywords: {
+    healthcare: {
+      amenity: [
+          "clinic",
+          "hospital",
+          "doctors",
+          "pharmacy",
+          "social_facility"
+      ]
+  },
+  financial: {
+      amenity: [
+          "bureau_de_change",
+          "atm",
+      ]
+  },
+  facilities: {
+      amenity: [
+          "drinking_water",
+          "shelter",
+          "shower",
+          "toilets",
+          "water_point",
+          "watering_place"
+      ]
+  },
+  public_service: {
+      amenity: [
+            "fire_station",
+            "police"
+        ]      
+  }
+}
