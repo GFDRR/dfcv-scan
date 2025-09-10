@@ -29,10 +29,12 @@ import ahpy
 import bs4
 import requests
 from functools import reduce
+import osmnx as ox
 
 from scipy.stats.mstats import gmean
 from dfcv_colocation_mapping import data_utils
 
+ox.settings.max_query_area_size = 500000000000000 
 logging.basicConfig(level=logging.INFO, force=True)
 
 
@@ -75,6 +77,7 @@ class DatasetManager:
         mhs_aggregation: str = "power_mean",
         config_file: str = None,
         acled_file: str = None,
+        osm_config_file: str = None,
         adm_config_file: str = None
     ):
         """Initialize a DatasetManager object for a given country.
@@ -165,9 +168,12 @@ class DatasetManager:
             acled_file = resources.joinpath("configs", "acled_creds.yaml")
         if adm_config_file is None:
             adm_config_file = resources.joinpath("configs", "adm_config.yaml")
+        if osm_config_file is None:
+            osm_config_file = resources.joinpath("configs", "osm_config.yaml")
 
         # Load main config
         self.config = data_utils.read_config(config_file)
+        self.osm_config = data_utils.read_config(osm_config_file)
 
         # Load ACLED credentials from file if available
         if os.path.exists(acled_file):
@@ -227,6 +233,9 @@ class DatasetManager:
         # Load admin config and assign grouping
         self.adm_config = data_utils.read_config(adm_config_file)
         self.data = self.assign_grouping()
+
+        logging.info("Downloading OSM...")
+        self.osm = self.download_osm()
 
 
     def download_geoboundary_with_attempts(self, attempts: int = 3):
@@ -491,6 +500,40 @@ class DatasetManager:
     
         return data
 
+
+    def download_osm(self) -> gpd.GeoDataFrame:
+        out_file = self._build_filename(
+            self.iso_code, f"OSM", self.local_dir, ext="geojson"
+        )  
+
+        if os.path.exists(out_file):
+            return gpd.read_file(out_file)
+        
+        osm = []
+        ox.settings.log_console = True
+
+        categories = self.osm_config["keywords"]
+        for category in (pbar := tqdm(categories, total=len(categories))):
+            pbar.set_description(f"Processing {category}")
+            tags = categories[category]
+            admin = self.geoboundary.dissolve("iso_code")["geometry"].values[0]
+            data = ox.features.features_from_polygon(admin, tags).to_crs(self.meter_crs)
+            data.geometry = data.geometry.centroid  
+            data = data.to_crs(self.crs)
+            
+            data["category"] = category.replace("_", " ").title()
+            osm.append(data[["geometry", "amenity", "category"]])
+            
+        osm = gpd.GeoDataFrame(pd.concat(osm)).reset_index()
+        try:
+            osm = osm.sjoin(self.geoboundary, how="left", predicate="intersects")
+            osm = osm.drop(["index_right"], axis=1)
+        except Exception as e:
+            raise ValueError(f"Spatial join failed: {e}")
+            
+        osm.to_file(out_file, driver="GeoJSON")  
+        return osm
+
     
     def download_geoboundary(self, adm_source: str) -> gpd.GeoDataFrame:
         """Download and prepare administrative boundaries for a country.
@@ -687,7 +730,15 @@ class DatasetManager:
             ucdp = gpd.GeoDataFrame(
                 geometry=gpd.points_from_xy(ucdp["longitude"], ucdp["latitude"], crs=self.crs),
                 data=ucdp
-            )            
+            )       
+
+            # Spatial join ACLED events with admin boundaries
+            try:
+                ucdp = ucdp.sjoin(self.geoboundary, how="left", predicate="intersects")
+                ucdp = ucdp.drop(["index_right"], axis=1)
+            except Exception as e:
+                raise ValueError(f"Spatial join failed: {e}")
+            
             ucdp.to_file(local_file, driver="GeoJSON")            
             logging.info(f"Saving UCDP to {local_file}")
 
@@ -718,14 +769,6 @@ class DatasetManager:
                 # Read exposure vector and clean zero values
                 ucdp_agg = gpd.read_file(exposure_vector)
                 ucdp_agg.loc[ucdp_agg[column] == 0, column] = None
-    
-                # Spatial join UCDP events with admin boundaries
-                try:
-                    admin = self.geoboundary
-                    ucdp = ucdp.sjoin(admin, how="left", predicate="intersects")
-                    ucdp = ucdp.drop(["index_right"], axis=1)
-                except Exception as e:
-                    raise ValueError(f"Spatial join failed: {e}")
     
                 # Aggregate total conflict events
                 column = "conflict_count"
@@ -878,6 +921,13 @@ class DatasetManager:
             acled = self._limit_filter(acled, self.acled_limit)
         if self.acled_exclude is not None:
             acled = self._exclude_filter(acled, self.acled_exclude)
+
+        # Spatial join ACLED events with admin boundaries
+        try:
+            acled = acled.sjoin(self.geoboundary, how="left", predicate="intersects")
+            acled = acled.drop(["index_right"], axis=1)
+        except Exception as e:
+            raise ValueError(f"Spatial join failed: {e}")
 
         # Aggregate to admin units if requested
         if aggregate:
@@ -1183,14 +1233,6 @@ class DatasetManager:
                 return np.nan
             else:
                 return np.nansum(a, **kwargs)
-
-        # Spatial join ACLED events with admin boundaries
-        try:
-            admin = self.geoboundary
-            agg = acled.sjoin(admin, how="left", predicate="intersects")
-            agg = agg.drop(["index_right"], axis=1)
-        except Exception as e:
-            raise ValueError(f"Spatial join failed: {e}")
         
         # Aggregate population sum
         pop_sum = self._aggregate_data(
@@ -1435,7 +1477,6 @@ class DatasetManager:
         for link in tqdm(links, total=len(links)):          
             out_file = os.path.join(out_dir, link)
             if not os.path.exists(out_file):
-                #urllib.request.urlretrieve(url+link, out_file)
                 self._download_url_progress(url+link, out_file)
         
         vrt_file = os.path.join(self.global_dir, f"{name.upper()}.vrt")
