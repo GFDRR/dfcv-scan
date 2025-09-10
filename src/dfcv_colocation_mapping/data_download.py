@@ -1234,6 +1234,8 @@ class DatasetManager:
                 return np.nan
             else:
                 return np.nansum(a, **kwargs)
+
+        admin = self.geoboundary
         
         # Aggregate population sum
         pop_sum = self._aggregate_data(
