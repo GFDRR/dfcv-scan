@@ -734,7 +734,8 @@ class DatasetManager:
 
             # Spatial join ACLED events with admin boundaries
             try:
-                ucdp = ucdp.sjoin(self.geoboundary, how="left", predicate="intersects")
+                admin = self.geoboundary
+                ucdp = ucdp.sjoin(admin, how="left", predicate="intersects")
                 ucdp = ucdp.drop(["index_right"], axis=1)
             except Exception as e:
                 raise ValueError(f"Spatial join failed: {e}")
