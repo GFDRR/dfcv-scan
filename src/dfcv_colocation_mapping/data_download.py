@@ -908,6 +908,14 @@ class DatasetManager:
             data[["type_of_violence", "civilian_targeting", "inter1", "inter2"]][data["type_of_violence"] == "State-based conflict"]
 
             # Save to file
+
+            # Spatial join ACLED events with admin boundaries
+            try:
+                data = data.sjoin(self.geoboundary, how="left", predicate="intersects")
+                data = data.drop(["index_right"], axis=1)
+            except Exception as e:
+                raise ValueError(f"Spatial join failed: {e}")
+            
             data.to_file(out_file)
             logging.info(f"ACLED file saved to {out_file}.")
 
@@ -922,13 +930,6 @@ class DatasetManager:
             acled = self._limit_filter(acled, self.acled_limit)
         if self.acled_exclude is not None:
             acled = self._exclude_filter(acled, self.acled_exclude)
-
-        # Spatial join ACLED events with admin boundaries
-        try:
-            acled = acled.sjoin(self.geoboundary, how="left", predicate="intersects")
-            acled = acled.drop(["index_right"], axis=1)
-        except Exception as e:
-            raise ValueError(f"Spatial join failed: {e}")
 
         # Aggregate to admin units if requested
         if aggregate:
