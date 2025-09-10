@@ -1239,7 +1239,7 @@ class DatasetManager:
         
         # Aggregate population sum
         pop_sum = self._aggregate_data(
-            agg,
+            acled,
             agg_col="population_best",
             agg_func=lambda x: _nansumwrapper(x),
         )
@@ -1249,7 +1249,7 @@ class DatasetManager:
 
         # Aggregate total conflict events
         event_count = self._aggregate_data(
-            agg, agg_col="conflict_count", agg_func="count"
+            acled, agg_col="conflict_count", agg_func="count"
         )
         event_count = event_count.rename(
             columns={"conflict_count": "acled_conflict_count"}
@@ -1257,7 +1257,7 @@ class DatasetManager:
 
         # Aggregate total conflict events
         fatalities_count = self._aggregate_data(
-            agg, agg_col="fatalities", agg_func="sum"
+            acled, agg_col="fatalities", agg_func="sum"
         )
         fatalities_count = fatalities_count.rename(
             columns={"fatalities": "acled_fatalities"}
@@ -1265,7 +1265,7 @@ class DatasetManager:
 
         # Aggregate conflict events where population_best is missing
         null_pop_event_count = self._aggregate_data(
-            agg[agg["population_best"].isna()],
+            acled[acled["population_best"].isna()],
             agg_col="null_conflict_count",
             agg_func="count",
         )
@@ -1274,7 +1274,7 @@ class DatasetManager:
         )
 
         # Merge all aggregated data with admin boundaries
-        agg = data_utils._merge_data(
+        acled = data_utils._merge_data(
             [admin, pop_sum, event_count, fatalities_count, null_pop_event_count],
             columns=[f"{self.adm_level}_ID"],
             how="left",
@@ -1282,18 +1282,18 @@ class DatasetManager:
 
         # Calculate population-weighted conflict exposure
         exposure_var = "acled_exposure"
-        agg[exposure_var] = agg["acled_population_best"] / (
-            agg["acled_conflict_count"] - agg["acled_null_conflict_count"].fillna(0)
+        acled[exposure_var] = acled["acled_population_best"] / (
+            acled["acled_conflict_count"] - acled["acled_null_conflict_count"].fillna(0)
         )
-        agg.loc[agg[exposure_var] == 0, exposure_var] = None
+        acled.loc[acled[exposure_var] == 0, exposure_var] = None
 
-        agg = self._calculate_conflict_stats(agg, source="acled")
+        acled = self._calculate_conflict_stats(acled, source="acled")
         
 
         # Save aggregated GeoDataFrame to file
-        agg.to_file(agg_file)
+        acled.to_file(agg_file)
             
-        return agg
+        return acled
 
 
     def _calculate_conflict_stats(self, data, source: str = "acled"):
