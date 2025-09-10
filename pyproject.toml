@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dfcv_colocation_mapping"
-version = "0.3.8"
+version = "0.3.9"
 authors = [
   { name="Isabelle Tingzon"},
 ]
