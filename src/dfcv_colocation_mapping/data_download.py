@@ -28,6 +28,7 @@ import itertools
 import ahpy
 import bs4
 import requests
+from functools import reduce
 
 from scipy.stats.mstats import gmean
 from dfcv_colocation_mapping import data_utils
@@ -264,9 +265,15 @@ class DatasetManager:
             pd.DataFrame: Updated dataset with multi-hazard scores recalculated 
                 using the new weights.
         """
+
+        hazard_dicts, categories = [], list(self.config["hazards"].keys())
+        for category in categories:
+            hazard_dicts.append(self.config["hazards"][category])
+
+        hazards_all = reduce(lambda a, b: {**a, **b}, hazard_dicts)
         
         # Get list of hazards from config
-        hazards_all = self.config["hazards"].keys()
+        #hazards_all = self.config["hazards"].keys()
 
         hazards = []
         for hazard in hazards_all:
@@ -300,7 +307,11 @@ class DatasetManager:
         # Check if consistency ratio is acceptable
         if cr < cr_threshold:
             # Update hazard weights in config
-            self.config["hazards"] = hazard_weights.target_weights
+            weights = hazard_weights.target_weights
+            for hazard in weights:
+                for category in categories:
+                    if hazard in self.config["hazards"][category]:
+                        self.config["hazards"][category][hazard] = weights[hazard]
             logging.info(self.config["hazards"])
 
             # Recalculate multi-hazard scores in the dataset
