@@ -548,7 +548,7 @@ class GeoPlot:
                                 
                 # pick only those <= max_val
                 if max_val >= 1000:
-                    nice_values = [10, 100, 500, 1000, 5000, 10000, 50000, 100000]
+                    nice_values = [10, 100, 500, 1000, 2500, 5000, 10000, 50000, 100000]
                     multiples = [v for v in nice_values if v < max_val]
                 else:
                     nice_values = [10, 50, 100, 500, 1000]
@@ -823,7 +823,7 @@ class GeoPlot:
 
         # Get title text
         if title is None:
-            title = config['title'].format(country)
+            title = config['title'].format(self.dm.country)
 
         # Get annotation text
         if annotation is None:
@@ -1738,11 +1738,21 @@ class GeoPlot:
 
         # Try to match the variable with legend title keys
         for key, title in legend_titles.items():
-            if key == var: 
-                # Exact match
+            if key == var: # Exact match
                 return title
             elif key in var:
                 # Partial match with special cases
+                if var.startswith("mhs_"):
+                    category = var.split("_")[1]
+                    fill = ""
+                    if category != "all":
+                        fill = category.title() + " "
+                    if "acled" in var or 'ucdp' in var:
+                        title = title.format(fill + "Multi-Hazard Conflict")
+                    else:
+                        title = title.format(fill + "Multi-Hazard")
+                    
+                    return title
                 if "exposure" in var.lower():
                     var = var.replace("_" + self.dm.asset, "")
                     var = var.replace(self.dm.asset, "")
