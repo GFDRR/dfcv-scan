@@ -365,6 +365,7 @@ class GeoPlot:
         xpos: float = None,
         clustering: bool = True,
         distance: int = 50,
+        zoom_to: dict = None,
         kwargs: dict = None,
         key: str = "points"
     ):
@@ -378,16 +379,8 @@ class GeoPlot:
 
         # Initialize figure
         if ax is None:   
-            fig, ax = plt.subplots(
-                figsize=(config['figsize_x'], config['figsize_y']),  
-                dpi=config['dpi']
-            )
-            data_adm = data.dissolve(self.dm.adm_level).reset_index()
-            data_adm.to_crs(config["crs"]).plot(
-                ax=ax, 
-                facecolor="none", 
-                edgecolor=config["edgecolor"], 
-                lw=config["linewidth"]
+            ax, xpos = self.plot_geoboundaries(
+                adm_level=self.dm.adm_level
             )
 
         if 'legend_x' in config:
@@ -400,10 +393,22 @@ class GeoPlot:
             data = self.dm.acled
         elif dataset == "ucdp":
             data = self.dm.ucdp
+        elif dataset == "osm":
+            data = self.dm.osm
 
         if column not in data.columns:
             warnings.warn(f"{column} is not in the {dataset.upper()} dataset.")
             return 
+
+        if zoom_to is not None:            
+            subdata = []
+            for key, value in zoom_to.items():
+                selected = data[data[key].isin([value])].to_crs(config['crs'])
+                if selected.empty:
+                    raise ValueError(f"{value} is not in {key}.")
+                subdata.append(selected)   
+                
+            data = gpd.GeoDataFrame(pd.concat(subdata), geometry="geometry")
 
         markerscale = config["markerscale"]
         categories = sorted(data[column].unique())  
