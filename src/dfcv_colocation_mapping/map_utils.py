@@ -396,6 +396,10 @@ class GeoPlot:
         elif dataset == "osm":
             data = self.dm.osm
 
+        if len(data) == 0:
+            warnings.warn(f"{dataset.upper()} is empty.")
+            return  
+
         if column not in data.columns:
             warnings.warn(f"{column} is not in the {dataset.upper()} dataset.")
             return 
