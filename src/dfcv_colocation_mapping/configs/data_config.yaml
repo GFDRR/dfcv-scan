@@ -47,7 +47,8 @@ hazard_data:
 
 urls: 
     # Source: https://acleddata.com/
-    acled_url: "https://api.acleddata.com/acled/read"
+    #acled_url: "https://api.acleddata.com/acled/read"
+    acled_url: "https://acleddata.com/api/acled/read"
     # Source: https://gadm.org/
     gadm_url: "https://geodata.ucdavis.edu/gadm/gadm4.1/json/gadm41_{}_{}.json.zip"
     # Source: https://www.geoboundaries.org/

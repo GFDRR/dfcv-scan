@@ -178,8 +178,8 @@ class DatasetManager:
         # Load ACLED credentials from file if available
         if os.path.exists(acled_file):
             self.acled_creds = data_utils.read_config(acled_file)
-            self.acled_key = self.acled_creds["acled_key"]
-            self.acled_email = self.acled_creds["acled_email"]
+            self.acled_key = self.acled_creds["access_token"]
+            #self.acled_email = self.acled_creds["acled_email"]
 
         # Uppercase standard labels
         self.global_name = global_name.upper()
@@ -746,6 +746,7 @@ class DatasetManager:
         ucdp = gpd.read_file(local_file)
 
         if aggregate:
+            admin = self.geoboundary
             exposure_raster = self._build_filename(
                 self.iso_code, f"{self.ucdp_name}_{self.asset}_exposure", self.local_dir, ext="tif"
             )
@@ -840,23 +841,24 @@ class DatasetManager:
             self.iso_code, f"{self.acled_name}_{self.asset}_exposure_{self.adm_level}", self.local_dir, ext="geojson"
         )
 
-        if self.acled_key is None or self.acled_email is None:
-            warnings.warn("WARNING: ACLED key or email is invalid.")
-            return
+        #if self.acled_key is None or self.acled_email is None:
+        #    warnings.warn("WARNING: ACLED key or email is invalid.")
+        #    return
 
         # Download ACLED data if needed
         if self.overwrite or not os.path.exists(out_file):    
             logging.info(f"Downloading ACLED data for {self.iso_code}...")
     
             params = dict(
-                key=self.acled_key,
-                email=self.acled_email,
+                #key=self.acled_key,
+                #email=self.acled_email,
                 country=self.country,
                 event_date=f"{self.conflict_start_date}|{self.conflict_end_date}",
                 event_date_where="BETWEEN",
                 population=population,
                 page=1,
             )
+            headers = {"Authorization": f"Bearer {self.acled_key}"}
 
             # Paginate through ACLED API results
             acled_url = self.config["urls"]["acled_url"]
@@ -865,13 +867,14 @@ class DatasetManager:
             while len_subdata != 0:
                 try:
                     logging.info(f"Reading ACLED page {params['page']}...")
-                    response = requests.get(acled_url, params=params)
+                    response = requests.get(acled_url, headers=headers, params=params)
                     subdata = pd.DataFrame(response.json()["data"])
                     data.append(subdata)
                     len_subdata = len(subdata)
                     params["page"] = params["page"] + 1  
-                except:
+                except Exception as e:
                     warnings.warn("WARNING: ACLED failed to download.")
+                    logging.info(e)
                     return
 
             # Concatenate all pages
