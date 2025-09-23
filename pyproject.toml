@@ -41,7 +41,7 @@ dependencies = [
     "importlib_resources == 6.5.2",
     "vincenty==0.1.4",
     "osmnx==2.0.6",
-    "dtmapi==0.5.1",
+    "dtmapi==0.1.5",
     "colormaps==0.4.2"
 ]
 
