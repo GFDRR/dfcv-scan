@@ -13,6 +13,8 @@ import matplotlib.lines as mlines
 from matplotlib.lines import Line2D
 from matplotlib.colors import ListedColormap
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from matplotlib.patches import Circle
+from matplotlib.legend_handler import HandlerPatch
 
 import copy
 import rasterio as rio
@@ -126,6 +128,7 @@ class GeoPlot:
     def plot_folium(
         self,
         var: str, 
+        data: gpd.GeoDataFrame = None,
         var_title: str = None, 
         adm_level: str = "ADM3",
         precision: int = 4,
@@ -148,14 +151,6 @@ class GeoPlot:
         Raises:
             ValueError: If `self.data` is empty or if `var` is not in the data columns.
         """
-        # Ensure data is not empty
-        if self.data.empty:
-            raise ValueError("Data is empty. Cannot create folium map.")
-        
-        # Ensure the variable exists
-        if var not in self.data.columns:
-            raise ValueError(f"Variable '{var}' not found in data columns.")
-
         # Refresh configuration and apply any overrides
         self.refresh()
         if kwargs is not None:
@@ -166,8 +161,17 @@ class GeoPlot:
         if var_title is None:
             var_title = self._get_title(var, "var_titles").title()
 
-        data = self.data.copy()
+        if data is None:
+            data = self.data.copy()
         original_crs = data.crs
+
+        # Ensure data is not empty
+        if data.empty:
+            raise ValueError("Data is empty. Cannot create folium map.")
+        
+        # Ensure the variable exists
+        if var not in data.columns:
+            raise ValueError(f"Variable '{var}' not found in data columns.")
 
         # Get centroid of the country for map centering
         centroid = data.dissolve("iso_code").to_crs(config["meter_crs"]).centroid
@@ -224,6 +228,7 @@ class GeoPlot:
     def plot_raster(
         self,
         raster_name: str,
+        data: gpd.GeoDataFrame = None,
         title: str = None,
         subtitle: str = None, 
         legend_title: str = None,
@@ -260,7 +265,8 @@ class GeoPlot:
             self.update(key, kwargs)
         config = self.map_config[key]
 
-        data = self.dm.data.copy()
+        if data is None:
+            data = self.dm.data.copy()
         if data.empty:
             raise ValueError("Data is empty. Cannot plot raster.")
         if 'iso_code' not in data.columns:
@@ -360,6 +366,7 @@ class GeoPlot:
     def plot_points(
         self, 
         column: str = None, 
+        data: gpd.GeoDataFrame = None,
         dataset: str = "acled",
         ax: matplotlib.axes.Axes = None,
         xpos: float = None,
@@ -373,11 +380,11 @@ class GeoPlot:
         if kwargs is not None:
             self.update(key, kwargs)
         config = self.map_config[key]
-        
-        data = self.data.copy()
-        iso_code = data.iso_code.values[0]
 
-        # Initialize figure
+        if data is None:
+            data = self.data.copy()
+        iso_code = data.iso_code.values[0]
+        
         if ax is None:   
             ax, xpos = self.plot_geoboundaries(
                 adm_level=self.dm.adm_level
@@ -435,7 +442,7 @@ class GeoPlot:
                 for index, label in enumerate(categories)
             ]
     
-            title = column.replace("_", " ").title()
+            title = self._get_title(column, "legend_titles")
             legend = ax.legend(
                 handles=handles,
                 title=title,
@@ -514,7 +521,7 @@ class GeoPlot:
                 alpha=config["alpha"],
                 lw=0.1
             )
-            title = column.replace("_", " ").title()
+            title = self._get_title(column, "legend_titles")
             legend1 = ax.legend(
                 handles=handles,
                 title=title,
@@ -598,9 +605,6 @@ class GeoPlot:
             bb1 = legend1.get_window_extent(renderer).transformed(ax.figure.transFigure.inverted())
             h1 = bb1.height
             center1 = bb1.y0 + h1/2  # center y of legend1
-
-            from matplotlib.patches import Circle
-            from matplotlib.legend_handler import HandlerPatch
             
             class HandlerStackedCircles(HandlerPatch):
                 def __init__(self, sizes, labels, title="Number of events", color="silver", **kwargs):
@@ -696,6 +700,7 @@ class GeoPlot:
     def plot_geoboundaries(
         self,
         adm_level: str, 
+        data: gpd.GeoDataFrame = None,
         title: str = None,
         subtitle: str = None, 
         legend_title: str = None,
@@ -733,18 +738,21 @@ class GeoPlot:
         Raises:
             ValueError: If `self.data` is empty or `adm_level` is not in data columns.
         """
-        if self.data.empty:
-            raise ValueError("Data is empty. Cannot plot geoboundaries.")
-        if adm_level not in self.data.columns:
-            raise ValueError(f"Column '{adm_level}' not found in data.")
-
         # Refresh config and apply any updates
         self.refresh()
         if kwargs is not None:
             self.update(key, kwargs)
         config = self.map_config[key]
-        
-        data = self.data.copy()
+
+        if data is None:
+            data = self.data.copy()
+
+        if data.empty:
+            raise ValueError("Data is empty. Cannot plot geoboundaries.")
+        if adm_level not in data.columns:
+            raise ValueError(f"Column '{adm_level}' not found in data.")
+            
+        data = data.to_crs(config['crs'])
         iso_code = data.iso_code.values[0]
 
         # Initialize figure
@@ -851,6 +859,7 @@ class GeoPlot:
         self,
         var1: str,
         var2: str,
+        data: gpd.GeoDataFrame = None,
         var1_bounds: list = None,
         var2_bounds: list = None,
         var1_title: str = None,
@@ -895,16 +904,6 @@ class GeoPlot:
         Raises:
             ValueError: If self.data is empty or required variables are missing.
         """
-
-        # Ensure data is not empty
-        if self.data.empty:
-            raise ValueError("Data is empty. Cannot plot bivariate choropleth.")
-
-        # Ensure both variables exist
-        for var in [var1, var2]:
-            if var not in self.data.columns:
-                raise ValueError(f"Variable '{var}' not found in self.data columns.")
-
         # Refresh config and apply any updates
         self.refresh()
         if kwargs is not None:
@@ -912,7 +911,18 @@ class GeoPlot:
         config = self.map_config[key]
 
         # Copy and reproject data
-        data = self.data.copy().to_crs(config['crs'])
+        if data is None:
+            data = self.dm.data.copy()
+
+        # Ensure data is not empty
+        if data.empty:
+            raise ValueError("Data is empty. Cannot plot bivariate choropleth.")
+        # Ensure both variables exist
+        for var in [var1, var2]:
+            if var not in data.columns:
+                raise ValueError(f"Variable '{var}' not found in self.data columns.")
+
+        data = data.to_crs(config['crs'])
         iso_code = data.iso_code.values[0]
 
         # Create figure
@@ -1101,6 +1111,7 @@ class GeoPlot:
     def plot_choropleth(
         self,
         var: str, 
+        data: gpd.GeoDataFrame = None,
         var_title: str = None, 
         title: str = None,
         subtitle: str = None, 
@@ -1132,16 +1143,7 @@ class GeoPlot:
         Raises:
             ValueError: If `self.data` is empty, or if the variable column is missing.
             ValueError: If `binning` method is invalid.
-        """
-
-        # Ensure data is not empty
-        if self.data.empty:
-            raise ValueError("self.data is empty. Cannot plot choropleth.")
-    
-        # Ensure the requested variable exists
-        if var not in self.data.columns:
-            raise ValueError(f"Variable '{var}' not found in self.data columns.")
-        
+        """        
         # Refresh config and apply any updates
         self.refresh()
         if kwargs is not None:
@@ -1149,10 +1151,16 @@ class GeoPlot:
         config = self.map_config[key]
 
         # Ensure CRS matches map config
-        data = self.data.copy()
-        data = data.to_crs(config['crs'])
+        if data is None:
+            data = self.dm.data.copy()
+
+        if data.empty:
+            raise ValueError("self.data is empty. Cannot plot choropleth.")
+        if var not in data.columns:
+            raise ValueError(f"Variable '{var}' not found in self.data columns.")
 
         # ISO code for country labeling
+        data = data.to_crs(config['crs'])
         iso_code = data.iso_code.values[0]
 
         # Determine legend title
@@ -1251,6 +1259,49 @@ class GeoPlot:
             tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
             xpos = tight_bbox_fig.x0
 
+        if config['legend_type'] == 'default':
+            # Transform value and get color
+            unique_value = data[var].dropna().unique()[0]
+            cmap_value = unique_value / 100 if 'relative' in var else unique_value
+            color = cmap(cmap_value) if 0 <= cmap_value <= 1 else cmap(0.5)
+
+            # Plot single-color map
+            data.plot(
+                ax=ax,
+                color=color,
+                edgecolor=config["edgecolor"],
+                linewidth=config["linewidth"]
+            )
+
+            # Add legend showing value
+            label_text = data_utils._humanize(unique_value)
+            
+            # Create a single-color legend patch
+            legend_patch = mpatches.Patch(
+                facecolor=color,
+                edgecolor=config["edgecolor"],
+                label=label_text
+            )
+            
+            # Add legend with title on the LEFT
+            legend = ax.legend(
+                handles=[legend_patch],
+                frameon=False,
+                fontsize=config["legend_label_fontsize"],
+                loc="center left",                     
+                bbox_to_anchor=(-0.1, 0.5),           
+                title=legend_title if legend_title else var,
+                title_fontsize=config["legend_title_fontsize"],
+            )    
+
+            ax.add_artist(legend)
+
+            # Determine left position of legend for alignment
+            fig.canvas.draw()
+            tight_bbox = legend.get_window_extent(fig.canvas.get_renderer())
+            tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
+            xpos = tight_bbox_fig.x0
+
         elif config['legend_type'] == 'colorbar':
             # Plot using a continuous colorbar legend
             data.plot(
@@ -1275,7 +1326,6 @@ class GeoPlot:
 
             if "legend_x" in config:
                 cbar_x = config["legend_x"]
-                
             if "legend_y" in config:
                 cbar_y = config["legend_y"]
             elif zoom_to is not None:
@@ -1405,7 +1455,6 @@ class GeoPlot:
                     size=config["barplot_label_size"],
                     va="center"
                 )
-
             iax.tick_params(axis="y", length=2)
 
             # Determine left position of legend for alignment
@@ -1426,7 +1475,7 @@ class GeoPlot:
 
         # Get variable legend title texts
         if var_title is None:
-            var_title = self._get_title(var, "var_titles").title()
+            var_title = self._get_title(var, "var_titles")#.title()
 
         # Get annotation text
         if annotation is None:
@@ -1436,7 +1485,6 @@ class GeoPlot:
 
         # Plot tiny map
         country = self.dm.country
-        #country = pycountry.countries.get(alpha_3=iso_code).name
         if zoom_to is not None:
             subunit = ", ".join([value for value in zoom_to.values()])
             country = f"{subunit}, {country}"
@@ -1671,6 +1719,11 @@ class GeoPlot:
                 end_date = datetime.strptime(self.dm.conflict_end_date, "%Y-%m-%d")
                 subtitle = f"Conflict events from {start_date.year} to {end_date.year}"
 
+            if "idp" in title.lower():
+                start_date = datetime.strptime(self.dm.dtm_start_date, "%Y-%m-%d")
+                end_date = datetime.strptime(self.dm.dtm_end_date, "%Y-%m-%d")
+                subtitle = f"Displacement events from {start_date.year} to {end_date.year}"
+
         # Add subtitle (if provided)
         if subtitle is not None:
             subtitle_x = config.get('subtitle_x', x)
@@ -1738,6 +1791,13 @@ class GeoPlot:
             AttributeError: If ``self.map_config`` does not contain the given 
                 ``config_key``.
         """
+
+        def capitalize(s: str) -> str:
+            words = s.split()
+            return " ".join(
+                w if any(c.isupper() for c in w[1:]) else w.capitalize()
+                for w in words
+            )
         
         if config_key not in self.map_config:
             raise AttributeError(f"`map_config` must contain '{config_key}'.")
@@ -1751,7 +1811,7 @@ class GeoPlot:
                 return title
             elif key in var:
                 # Partial match with special cases
-                if var.startswith("mhs_"):
+                if var.startswith("mhs"):
                     category = var.split("_")[1]
                     fill = ""
                     if category != "all":
@@ -1760,22 +1820,29 @@ class GeoPlot:
                         title = title.format(fill + "Multi-Hazard Conflict")
                     else:
                         title = title.format(fill + "Multi-Hazard")
-                    
                     return title
+                    
                 if "exposure" in var.lower():
                     var = var.replace("_" + self.dm.asset, "")
                     var = var.replace(self.dm.asset, "")
+                    
                 if "acled" in var or 'ucdp' in var:
                     return title.format("conflict") 
+                    
                 elif "mhs" in var:
                     return title.format("multi-hazard")
+                                        
                 else:
                     # Generic replacement for hazard names
                     inp = var.replace("_" + key, "").replace("_", " ")
-                    return title.format(inp)
+                    return capitalize(title.format(inp))
+
+        if "_" in var or "type" in var:
+            var = var.replace("_", " ").title()
+            return capitalize(var)
 
         # Fallback: return variable as a title-cased string with "Risk"
-        return var.replace("_", " ").title() + " Risk"
+        return capitalize(var + " Risk")
 
     
     def _get_annotation(self, var_list: list = [], add_adm: bool = True):
