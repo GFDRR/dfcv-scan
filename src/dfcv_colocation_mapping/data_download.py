@@ -30,6 +30,7 @@ import bs4
 import requests
 from functools import reduce
 import osmnx as ox
+from dtmapi import DTMApi
 
 from scipy.stats.mstats import gmean
 from dfcv_colocation_mapping import data_utils
@@ -51,7 +52,6 @@ class DatasetManager:
         iso_code: str,
         adm_source: str = 'geoboundary',
         acled_key: str = None,
-        acled_email: str = None,
         acled_limit: str = None,
         acled_exclude: str = None,
         acled_country: str = None,
@@ -59,6 +59,12 @@ class DatasetManager:
         ucdp_name: str = "ucdp",
         conflict_start_date: str = None,
         conflict_end_date: str = None,
+        conflict_last_n_years: int = 10,
+        dtm_key: str = None,
+        dtm_adm_level: str = None,
+        dtm_start_date: str = None,
+        dtm_end_date: str = None,
+        dtm_last_n_years: int = 10,
         jrc_rp: int = 100,
         jrc_version: str = "v1",
         fathom_year: int = 2020,
@@ -76,6 +82,7 @@ class DatasetManager:
         group: str = "Region",
         mhs_aggregation: str = "power_mean",
         config_file: str = None,
+        dtm_file: str = None,
         acled_file: str = None,
         osm_config_file: str = None,
         adm_config_file: str = None
@@ -132,7 +139,6 @@ class DatasetManager:
 
         # Store ACLED credentials and filtering options
         self.acled_key = acled_key
-        self.acled_email = acled_email
         self.acled_limit = acled_limit
         self.acled_exclude = acled_exclude
         self.acled_country = acled_country
@@ -141,10 +147,25 @@ class DatasetManager:
         self.conflict_start_date = conflict_start_date
         self.conflict_end_date = conflict_end_date
 
+        if dtm_adm_level is None:
+            if int(self.adm_level[-1]) > 2:
+                dtm_adm_level = "ADM2"
+            else:
+                dtm_adm_level = self.adm_level
+
+        self.dtm_adm_level = dtm_adm_level
+        self.dtm_start_date = dtm_start_date
+        self.dtm_end_date = dtm_end_date
+
         if self.conflict_start_date is None:
-            self.conflict_start_date = (datetime.date.today() - relativedelta(years=10)).isoformat()
+            self.conflict_start_date = (datetime.date.today() - relativedelta(years=conflict_last_n_years)).isoformat()
         if self.conflict_end_date is None:
             self.conflict_end_date = datetime.date.today().isoformat()
+
+        if self.dtm_start_date is None:
+            self.dtm_start_date = (datetime.date.today() - relativedelta(years=dtm_last_n_years)).isoformat()
+        if self.dtm_end_date is None:
+            self.dtm_end_date = datetime.date.today().isoformat()
 
         # Store Fathom flood layer parameters
         self.fathom_year = fathom_year
@@ -166,6 +187,8 @@ class DatasetManager:
             config_file = resources.joinpath("configs", "data_config.yaml")
         if acled_file is None:
             acled_file = resources.joinpath("configs", "acled_creds.yaml")
+        if dtm_file is None:
+            dtm_file = resources.joinpath("configs", "dtm_creds.yaml")
         if adm_config_file is None:
             adm_config_file = resources.joinpath("configs", "adm_config.yaml")
         if osm_config_file is None:
@@ -176,11 +199,17 @@ class DatasetManager:
         self.osm_config = data_utils.read_config(osm_config_file)
 
         # Load ACLED credentials from file if available
+        self.acled_key = acled_key
         if os.path.exists(acled_file):
             self.acled_creds = data_utils.read_config(acled_file)
             self.acled_key = self.acled_creds["access_token"]
-            #self.acled_email = self.acled_creds["acled_email"]
 
+        # Load IOM DTM credentials from file if available
+        self.dtm_key = dtm_key
+        if os.path.exists(dtm_file):
+            self.dtm_creds = data_utils.read_config(dtm_file)
+            self.dtm_key = self.dtm_creds["dtm_key"]
+        
         # Uppercase standard labels
         self.global_name = global_name.upper()
         self.fathom_name = fathom_name.upper()
@@ -201,14 +230,16 @@ class DatasetManager:
         self.admin_file = None
 
         # Load geoboundaries, fallback to GADM if primary source fails
-        logging.info("Loading geoboundary...")
+        logging.info(f"Loading {self.adm_level} geoboundaries...")
         self.adm_source = adm_source
         self.geoboundary = self.download_geoboundary_with_attempts()
         self.merge_columns = list(self.geoboundary.columns)
 
         # Load hazard layers
-        logging.info("Loading asset and hazard layers...")
+        logging.info("Loading asset layers...")
         self.assets = self.download_datasets("asset")
+
+        logging.info("Loading hazard layers...")
         self.fathom = self.download_fathom()
         self.hazards = self.download_datasets("hazard")
         
@@ -223,6 +254,10 @@ class DatasetManager:
         logging.info("Loading UCDP conflict data...")
         self.ucdp = self.download_ucdp()
         self.ucdp_agg = self.download_ucdp(aggregate=True)
+
+        logging.info(f"Downloading displacement data from {self.dtm_start_date} to {self.dtm_end_date}")
+        logging.info(f"Loading IOM DTM {self.adm_level} displacement data...")
+        self.dtm = self.download_dtm(dtm_adm_level)
 
         # Compute multi-hazard scores
         logging.info("Calculating scores...")
@@ -241,14 +276,14 @@ class DatasetManager:
     def download_geoboundary_with_attempts(self, attempts: int = 3):
         for i in range(attempts):
             try:
-                return self.download_geoboundary(self.adm_source)
+                return self.download_geoboundary(self.adm_source, self.adm_level)
             except Exception as err:
                 logging.info(err)
-                logging.info(f"Loading geoboundaries failed. Trying again {i}/{attempts}")
+                logging.info(f"Loading geoboundaries failed. Trying again {i+1}/{attempts}")
                 pass
                 
         logging.info(f"Loading geoboundaries failed. Trying with GADM...")
-        return self.download_geoboundary("gadm")
+        return self.download_geoboundary("gadm", self.adm_level)
 
 
     def calculate_ahp(
@@ -372,11 +407,18 @@ class DatasetManager:
         
         data = []
 
+        datasets = [self.assets, self.hazards, self.fathom]
+
         # Add hazards and Fathom datasets if available, replacing NaN with 0
-        for dataset in [self.assets, self.hazards, self.fathom]:
+        for dataset in datasets:
             if dataset is not None:
                 dataset = dataset.mask(dataset.isna(), 0)
                 data.append(dataset)
+
+        # Add IOM DTM data if available and non-empty
+        if self.dtm_adm_level == self.adm_level:
+            if len(self.dtm) > 0:
+                datasets.append(self.dtm)
 
         # Add aggregated ACLED data if available and non-empty
         if self.acled_agg is not None:
@@ -441,6 +483,7 @@ class DatasetManager:
 
         # Loop through each suffix to calculate MHS
         for suffix in suffixes:
+            
             # Prepare hazard columns and normalized weights
             hazard_dicts, categories = [], list(self.config["hazards"].keys())
             for category in categories:
@@ -500,42 +543,8 @@ class DatasetManager:
     
         return data
 
-
-    def download_osm(self) -> gpd.GeoDataFrame:
-        out_file = self._build_filename(
-            self.iso_code, f"OSM", self.local_dir, ext="geojson"
-        )  
-
-        if os.path.exists(out_file):
-            return gpd.read_file(out_file)
-        
-        osm = []
-        ox.settings.log_console = True
-
-        categories = self.osm_config["keywords"]
-        for category in (pbar := tqdm(categories, total=len(categories))):
-            pbar.set_description(f"Processing {category}")
-            tags = categories[category]
-            admin = self.geoboundary.dissolve("iso_code")["geometry"].values[0]
-            data = ox.features.features_from_polygon(admin, tags).to_crs(self.meter_crs)
-            data.geometry = data.geometry.centroid  
-            data = data.to_crs(self.crs)
-            
-            data["category"] = category.replace("_", " ").title()
-            osm.append(data[["geometry", "amenity", "category"]])
-            
-        osm = gpd.GeoDataFrame(pd.concat(osm)).reset_index()
-        try:
-            osm = osm.sjoin(self.geoboundary, how="left", predicate="intersects")
-            osm = osm.drop(["index_right"], axis=1)
-        except Exception as e:
-            raise ValueError(f"Spatial join failed: {e}")
-            
-        osm.to_file(out_file, driver="GeoJSON")  
-        return osm
-
     
-    def download_geoboundary(self, adm_source: str) -> gpd.GeoDataFrame:
+    def download_geoboundary(self, adm_source: str, adm_level: str, overwrite: bool=False) -> gpd.GeoDataFrame:
         """Download and prepare administrative boundaries for a country.
 
         Downloads GADM or GeoBoundaries data for the ISO code and ADM level, 
@@ -557,19 +566,19 @@ class DatasetManager:
 
         # Build output filenames
         out_file = self._build_filename(
-            self.iso_code, f"{adm_source}_{self.adm_level}", self.local_dir, ext="geojson"
+            self.iso_code, f"{adm_source}_{adm_level}", self.local_dir, ext="geojson"
         )    
         gadm_file = self._build_filename(
-            self.iso_code, f"gadm_{self.adm_level}", self.local_dir, ext="geojson"
+            self.iso_code, f"gadm_{adm_level}", self.local_dir, ext="geojson"
         ) 
 
         # Prefer GADM file if exists
-        if os.path.exists(gadm_file) and not self.overwrite:
+        if not overwrite and os.path.exists(gadm_file):
             adm_source = "gadm"
             out_file = gadm_file
 
         # Download only if file doesn't exist or overwrite is True
-        elif self.overwrite or not os.path.exists(out_file):
+        elif overwrite or not os.path.exists(out_file):
             logging.info(f"Downloading geoboundary for {self.iso_code}...")
 
             # Download GADM dataset
@@ -577,16 +586,16 @@ class DatasetManager:
                 try:
                     self.download_url(
                         adm_source, 
-                        dataset_name=f"{adm_source}_{self.adm_level}", 
+                        dataset_name=f"{adm_source}_{adm_level}", 
                         ext="geojson"
                     )
                     geoboundary = gpd.read_file(out_file)
                 except Exception as e:
-                    raise FileNotFoundError(f"Failed to download or read GADM data: {str(e)}")
+                        raise FileNotFoundError(f"Failed to download or read GADM data: {str(e)}")
 
                 # Rename columns to standard format
                 rename = dict()
-                for index in range(int(self.adm_level[-1])+1):
+                for index in range(int(adm_level[-1])+1):
                     if index == 0:
                         rename[f'GID_{index}'] = 'iso_code'
                     else:
@@ -604,7 +613,7 @@ class DatasetManager:
                 # Download GeoBoundaries dataset
                 gbhumanitarian_url = self.config["urls"]["gbhumanitarian_url"]
                 gbopen_url = self.config["urls"]["gbopen_url"]
-                level = int(self.adm_level[-1])
+                level = int(adm_level[-1])
 
                 # Download each administrative level
                 datasets = []
@@ -614,42 +623,43 @@ class DatasetManager:
                         self.iso_code, adm_level, self.local_dir, ext="geojson"
                     )
 
-                    # Try GBHumanitarian URL first
-                    url = f"{gbhumanitarian_url}{self.iso_code}/{adm_level}/"
-                    try:
-                        r = requests.get(url)
-                        download_path = r.json()["gjDownloadURL"]
-                    except Exception:
-                        # Fallback to GBOpen URL if GBHumanitarian URL fails
+                    if not os.path.exists(intermediate_file):
+                        # Try GBHumanitarian URL first
+                        url = f"{gbhumanitarian_url}{self.iso_code}/{adm_level}/"
                         try:
-                            url = f"{gbopen_url}{self.iso_code}/{adm_level}/"
                             r = requests.get(url)
                             download_path = r.json()["gjDownloadURL"]
+                        except Exception:
+                            # Fallback to GBOpen URL if GBHumanitarian URL fails
+                            try:
+                                url = f"{gbopen_url}{self.iso_code}/{adm_level}/"
+                                r = requests.get(url)
+                                download_path = r.json()["gjDownloadURL"]
+                            except Exception as e:
+                                raise requests.RequestException(f"Failed to download {adm_level} boundaries: {str(e)}")
+                
+                        # Download and save the GeoJSON data
+                        try:
+                            geoboundary = requests.get(download_path).json()
+                            with open(intermediate_file, "w") as file:
+                                geojson.dump(geoboundary, file)
+                            logging.info(f"Geoboundary file saved to {intermediate_file}.")
                         except Exception as e:
-                            raise requests.RequestException(f"Failed to download {adm_level} boundaries: {str(e)}")
-            
-                    # Download and save the GeoJSON data
-                    try:
-                        geoboundary = requests.get(download_path).json()
-                        with open(intermediate_file, "w") as file:
-                            geojson.dump(geoboundary, file)
-                    except Exception as e:
-                        raise FileNotFoundError(f"Failed to save GeoJSON file {intermediate_file}: {str(e)}")
-
+                            raise FileNotFoundError(f"Failed to save GeoJSON file {intermediate_file}: {str(e)}")
+    
                     try:
                         # Read the downloaded GeoJSON into a GeoDataFrame
                         geoboundary = gpd.read_file(intermediate_file)
                         geoboundary["iso_code"] = self.iso_code
                 
                         # Select relevant columns and rename them
-                        geoboundary = geoboundary[["iso_code", "shapeName", "shapeID", "geometry"]]
-                        geoboundary.columns = ["iso_code", adm_level, f"{adm_level}_ID", "geometry"]
+                        if "shapeName" in geoboundary.columns and "shapeID" in geoboundary.columns:
+                            geoboundary = geoboundary[["iso_code", "shapeName", "shapeID", "geometry"]]
+                            geoboundary.columns = ["iso_code", adm_level, f"{adm_level}_ID", "geometry"]
 
                         # Save geoboundary with renamed columns
                         datasets.append(geoboundary)
                         geoboundary.to_file(intermediate_file)
-                        logging.info(f"Geoboundary file saved to {intermediate_file}.")
-                        
                     except Exception as e:
                         raise FileNotFoundError(f"Failed to read GeoJSON file {intermediate_file}: {str(e)}")
 
@@ -682,12 +692,101 @@ class DatasetManager:
             logging.info(f"Geoboundary file saved to {out_file}.")
 
         # Load final geoboundary and update attributes
-        self.admin_file = out_file
-        self.adm_source = adm_source
         geoboundary = gpd.read_file(out_file).to_crs(self.crs)
-        self.merge_columns = list(geoboundary.columns)
+
+        if adm_level == self.adm_level:
+            self.admin_file = out_file
+            self.adm_source = adm_source
+            self.merge_columns = list(geoboundary.columns)
         
         return geoboundary
+
+
+    def download_osm(self) -> gpd.GeoDataFrame:
+        out_file = self._build_filename(
+            self.iso_code, f"OSM", self.local_dir, ext="geojson"
+        )  
+
+        if os.path.exists(out_file):
+            return gpd.read_file(out_file)
+        
+        osm = []
+        ox.settings.log_console = True
+
+        categories = self.osm_config["keywords"]
+        for category in (pbar := tqdm(categories, total=len(categories))):
+            pbar.set_description(f"Processing {category}")
+            tags = categories[category]
+            admin_bounds = self.geoboundary.dissolve("iso_code")["geometry"].envelope.values[0]
+            data = ox.features.features_from_polygon(admin_bounds, tags).to_crs(self.meter_crs)
+            data.geometry = data.geometry.centroid  
+            data = data.to_crs(self.crs)
+            
+            data["category"] = category.replace("_", " ").title()
+            osm.append(data[["geometry", "amenity", "category"]])
+            
+        osm = gpd.GeoDataFrame(pd.concat(osm)).reset_index().to_crs(self.crs)
+        try:
+            osm = osm.sjoin(self.geoboundary, how="left", predicate="intersects")
+            osm = osm.drop(["index_right"], axis=1)
+        except Exception as e:
+            raise ValueError(f"Spatial join failed: {e}")
+
+        osm = osm.rename(columns={'category': 'osm_category', "amenity": "osm_amenity"})
+        osm.to_file(out_file, driver="GeoJSON")  
+        return osm
+
+
+    def download_dtm(self, dtm_adm_level: str = "ADM2", idp_column: str = "numPresentIdpInd"):
+        geojson_file = self._build_filename(
+            self.iso_code, f"DTM_{dtm_adm_level}", self.local_dir, ext="geojson"
+        )    
+        csv_file = self._build_filename(
+            self.iso_code, f"DTM_{dtm_adm_level}", self.local_dir, ext="csv"
+        )    
+
+        if self.dtm_key is not None:
+            api = DTMApi(subscription_key=self.dtm_key)
+            self.dtm_countries = api.get_all_countries()
+
+        if self.dtm_key and (self.overwrite or not os.path.exists(geojson_file)):           
+            try:
+                country_name = self.dtm_countries[self.dtm_countries["admin0Pcode"] == self.iso_code]["admin0Name"].values[0]
+            except:
+                warnings.warn(f"{self.iso_code} not in DTM.")
+                return 
+
+            try:
+                adm = self.download_geoboundary(adm_source="geoboundary", adm_level=dtm_adm_level, overwrite=True)
+            except:
+                adm = self.download_geoboundary(adm_source="gadm", adm_level=dtm_adm_level)
+                
+            if dtm_adm_level == "ADM1":
+                dtm_raw = api.get_idp_admin1_data(
+                    CountryName=country_name, FromReportingDate=self.dtm_start_date, ToReportingDate=self.dtm_end_date
+                )
+                   
+            elif dtm_adm_level == "ADM2":
+                dtm_raw = api.get_idp_admin2_data(
+                    CountryName=country_name, FromReportingDate=self.dtm_start_date, ToReportingDate=self.dtm_end_date
+                )
+
+            if len(dtm_raw) == 0:
+                return
+                
+            dtm_adm_level_num = dtm_adm_level[-1]
+            column = f"admin{dtm_adm_level_num}Name"
+            dtm_agg = self._aggregate_data(
+                dtm_raw[[column, idp_column]], agg_col=idp_column, agg_func="sum", adm_level=column
+            )
+            
+            dtm_data = adm.merge(dtm_agg, left_on=dtm_adm_level, right_on=column, how="left")
+            dtm_data.to_crs(self.crs).to_file(geojson_file)
+            dtm_raw.to_csv(csv_file)
+            
+        self.dtm_raw = pd.read_csv(csv_file)
+        dtm = gpd.read_file(geojson_file)
+        return dtm
 
 
     def download_ucdp(self, aggregate: bool = False):
@@ -840,10 +939,6 @@ class DatasetManager:
         exposure_vector = self._build_filename(
             self.iso_code, f"{self.acled_name}_{self.asset}_exposure_{self.adm_level}", self.local_dir, ext="geojson"
         )
-
-        #if self.acled_key is None or self.acled_email is None:
-        #    warnings.warn("WARNING: ACLED key or email is invalid.")
-        #    return
 
         # Download ACLED data if needed
         if self.overwrite or not os.path.exists(out_file):    
@@ -1447,7 +1542,7 @@ class DatasetManager:
             if len(geojson_files) == 0:
                 json_file = [file for file in os.listdir(zip_dir) if file.endswith(".json")][0]
                 json_file = os.path.join(zip_dir, json_file)
-                with open(json_file) as data:
+                with open(json_file, encoding='utf-8') as data:
                     features = json.load(data)["features"]
                     
                 geojson = gpd.GeoDataFrame.from_features(features)
@@ -1889,6 +1984,7 @@ class DatasetManager:
         data: gpd.GeoDataFrame,
         agg_col: str = None,
         agg_func: str = "sum",
+        adm_level: str = None
     ) -> gpd.GeoDataFrame:
         """
         Aggregate data for a given administrative level.
@@ -1912,7 +2008,12 @@ class DatasetManager:
         """
 
         # Define administrative ID column
-        agg_name = f"{self.adm_level}_ID"
+        if adm_level is None:
+            adm_level = self.adm_level
+
+        agg_name = f"{adm_level}_ID"
+        if agg_name not in data.columns:
+            agg_name = adm_level
 
         if agg_func != "count" and agg_col is None:
             raise ValueError("agg_col must be provided when agg_func is not 'count'.")
@@ -1923,6 +2024,7 @@ class DatasetManager:
             agg = data.groupby([agg_name], dropna=False).size().reset_index()
         else:
             # Apply specified aggregation function to agg_col
+            data = data.copy()
             data[agg_col] = data[agg_col].astype(float)
             agg = (
                 data.groupby([agg_name], dropna=False)
