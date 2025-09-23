@@ -105,10 +105,12 @@ def _humanize(value, number=None) -> str:
             formatter = "%.1f"  # e.g., 12.3K
 
         text = humanize.intword(value, formatter)
-        text = text.replace(" thousand", "K").replace(" million", "M")
+        text = text.replace(" thousand", "K")
+        text = text.replace(" million", "M")
         
         # Remove trailing .0 for K
         text = text.replace(".0K", "K")
+        text = text.replace(".0M", "M")
         
         return text
 
