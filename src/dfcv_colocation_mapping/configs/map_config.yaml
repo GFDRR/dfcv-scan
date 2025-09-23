@@ -232,6 +232,8 @@ folium:
 
 
 legend_titles:
+    numPresentIdpInd: "Number of IDPs"
+    osm_category: "OSM Category"
     conflict_count: "Number of conflict events"
     fatalities_per_conflict: "Number of fatalities per conflict"
     fatalities: "Number of fatalities"
@@ -246,9 +248,10 @@ legend_titles:
 
 
 var_titles:
-    conflict_count: "Number of conflict events"
-    fatalities_per_conflict: "Fatalities per conflict"
-    fatalities: "Number of fatalities"
+    numPresentIdpInd: "Number of IDPs"
+    conflict_count: "Number of Conflict Events"
+    fatalities_per_conflict: "Fatalities per Conflict"
+    fatalities: "Number of Fatalities"
     intensity_weighted_exposure_relative: "Intensity-weighted Relative {} Exposure"
     exposure_relative: "Relative {} Exposure"
     exposure: "Absolute {} Exposure"
