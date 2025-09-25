@@ -237,13 +237,14 @@ legend_titles:
     conflict_count: "Number of conflict events"
     fatalities_per_conflict: "Number of fatalities per conflict"
     fatalities: "Number of fatalities"
-    intensity_weighted_exposure_relative: "Intensity-weighted \n{} Exposure Index"
+    intensity_weighted_exposure_relative: "Intensity-weighted Relative \n{} Exposure Index"
     intensity_weighted_exposure: "Intensity-weighted \n{} Exposure Index"
-    mhs: "\n{} Exposure Index"
-    exposure_relative: "Proportion of the population \nexposed to {} (%)"
-    exposure: "Population exposed to \n{}"
+    mhs: "{} \n{} Exposure Index"
+    exposure_relative: "Proportion of {} \n exposed to {} (%)"
+    exposure: "{} exposed to {}"
     earthquake: "Peak Ground \nAcceleration (PGA)"
     cyclone: "Windspeed"
+    bem: "Building Valuation \n(Total US Dollars)"
     worldpop: "Population"
 
 
@@ -252,9 +253,10 @@ var_titles:
     conflict_count: "Number of Conflict Events"
     fatalities_per_conflict: "Fatalities per Conflict"
     fatalities: "Number of Fatalities"
-    intensity_weighted_exposure_relative: "Intensity-weighted Relative {} Exposure"
-    exposure_relative: "Relative {} Exposure"
-    exposure: "Absolute {} Exposure"
+    intensity_weighted_exposure_relative: "Intensity-weighted Relative {} Exposure to {}"
+    exposure_relative: "Relative {} {} Exposure"
+    exposure: "Absolute {} {} Exposure"
+    bem: "Building Valuation"
     worldpop: "Population"
 
     
@@ -270,4 +272,7 @@ annotations:
     exposure: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
     acled: "Conflict data from Armed Conflict Location & Event Data Project (ACLED)"
     ucdp: "Conflict data from UCDP (Sundberg, Ralph, and Erik Melander, 2013)"
-    
+
+asset_alias:
+    bem: "Building Value"
+    worldpop: "Population"
