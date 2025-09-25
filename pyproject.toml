@@ -3,8 +3,8 @@ requires = ["setuptools >= 80.9.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dfcv_scan"
-version = "0.0.1"
+name = "dfcv_colocation_mapping"
+version = "0.5.0"
 authors = [
   { name="Isabelle Tingzon"},
 ]
