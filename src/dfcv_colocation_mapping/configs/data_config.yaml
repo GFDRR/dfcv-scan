@@ -22,6 +22,10 @@ hazards:
         earthquake: 1
     biophysical:
         wildfire: 1
+
+assets:
+    - 'worldpop'
+    - 'bem'
     
 threshold:
     global_earthquake: 0.18 # https://dc.engconfintl.org/cgi/viewcontent.cgi?article=1015&context=geohazards
@@ -43,6 +47,7 @@ nodata:
 
 asset_data:
     - 'worldpop'
+    - 'global_bem'
 
 hazard_data: 
     - 'global_earthquake'
@@ -55,7 +60,6 @@ hazard_data:
 
 urls: 
     # Source: https://acleddata.com/
-    #acled_url: "https://api.acleddata.com/acled/read"
     acled_url: "https://acleddata.com/api/acled/read"
     # Source: https://gadm.org/
     gadm_url: "https://geodata.ucdavis.edu/gadm/gadm4.1/json/gadm41_{}_{}.json.zip"
@@ -63,8 +67,12 @@ urls:
     gbhumanitarian_url: "https://www.geoboundaries.org/api/current/gbHumanitarian/"
     # Source: https://www.geoboundaries.org/
     gbopen_url: "https://www.geoboundaries.org/api/current/gbOpen/"
-    # https://hub.worldpop.org/geodata/listing?id=69
+    # Source: https://hub.worldpop.org/geodata/listing?id=69
     worldpop_url: "https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/{}/{}_ppp_2020_UNadj.tif"
+    # Source: https://giri.unepgrid.ch/map?view=MX-B7WR7-ZLQO2-J5OMQ&list=explore
+    global_bem_url: "https://hazards-data.unepgrid.ch/bem_5x5_valfis.tif"
+    # Source: https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC
+    global_ghsl_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_S_GLOBE_R2023A/GHS_BUILT_S_E2030_GLOBE_R2023A_54009_100/V1-0/GHS_BUILT_S_E2030_GLOBE_R2023A_54009_100_V1_0.zip"
     # Source: https://ucdp.uu.se/encyclopedia
     global_ucdp_url: "https://ucdp.uu.se/downloads/ged/ged251-csv.zip"
     # Source: https://datacatalog.worldbank.org/search/dataset/0037584
@@ -83,3 +91,96 @@ urls:
     global_fluvial_flood_v2_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/RP{}/"
     # Source: https://gwis.jrc.ec.europa.eu/applications/data-and-services
     global_wildfire_url: "https://maps.effis.emergency.copernicus.eu/gwis?LAYERS=nasa_geos5.fwi&FORMAT=image/tiff&TRANSPARENT=true&SINGLETILE=false&SERVICE=wms&VERSION=1.1.1&REQUEST=GetMap&STYLES=&SRS=EPSG:4326&BBOX=-180.15625,-58.125,179.84375,75.125&WIDTH=1152&HEIGHT=533&TIME=2025-09-09.tif"
+
+acled_hierarchy:
+    "Political_violence":
+        event_type:
+            "Battles":
+                sub_event_type:
+                    - "Government regains territory"
+                    - "Non-state actor overtakes territory"
+                    - "Armed clash"
+            "Explosions/Remote violence":
+                sub_event_type:
+                    - "Chemical weapon"
+                    - "Air/drone strike"
+                    - "Suicide bomb"
+                    - "Shelling/artillery/missile attack"
+                    - "Remote explosive/landmine/IED"
+                    - "Grenade"
+            "Riots":
+                sub_event_type:
+                    - "Mob violence"
+            "Violence against civilians":
+                sub_event_type:
+                    - "Sexual violence"
+                    - "Attack"
+                    - "Abduction/forced disappearance"
+    "Political violence; Demonstrations":
+        event_type:
+            "Protests":
+                sub_event_type:
+                    - "Excessive force against protesters"                
+    "Demonstrations":
+        event_type:
+            "Protests":
+                sub_event_type:
+                    - "Protest with intervention"
+                    - "Peaceful protest"
+            "Riots":
+                sub_event_type:
+                    - "Violent demonstration"
+    "Strategic developments":
+        event_type:
+            "Strategic developments":
+                sub_event_type:
+                    - "Agreement"
+                    - "Arrests"
+                    - "Change to group/activity"
+                    - "Disrupted weapons use"
+                    - "Headquarters or base established"
+                    - "Looting/property destruction"
+                    - "Non-violent transfer of territory"
+                    - "Other"
+
+acled_filters:
+    include:
+        disorder_type: 
+            - "Political violence"
+            - "Political violence; Demonstrations"
+            - "Demonstrations"
+            - "Strategic developments"
+        event_type:
+            - 'Protests'
+            - 'Violence against civilians'
+            - 'Strategic developments'
+            - 'Battles'
+            - 'Riots'
+            - 'Explosions/Remote violence'
+        sub_event_type:
+            - "Government regains territory"
+            - "Non-state actor overtakes territory"
+            - "Armed clash"
+            - "Chemical weapon"
+            - "Air/drone strike"
+            - "Suicide bomb"
+            - "Shelling/artillery/missile attack"
+            - "Remote explosive/landmine/IED"
+            - "Grenade"
+            - "Mob violence"
+            - "Sexual violence"
+            - "Attack"
+            - "Abduction/forced disappearance"
+            - "Excessive force against protesters"   
+            - "Protest with intervention"
+            - "Peaceful protest"
+            - "Violent demonstration"
+            - "Agreement"
+            - "Arrests"
+            - "Change to group/activity"
+            - "Disrupted weapons use"
+            - "Headquarters or base established"
+            - "Looting/property destruction"
+            - "Non-violent transfer of territory"
+            - "Other"
+    exclude: {}
