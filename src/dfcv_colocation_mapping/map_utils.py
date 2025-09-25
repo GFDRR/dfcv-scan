@@ -39,7 +39,7 @@ from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
 from shapely.geometry import MultiPoint
 
-from src.dfcv_colocation_mapping import data_utils
+from dfcv_colocation_mapping import data_utils
 from vincenty import vincenty
 
 
