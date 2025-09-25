@@ -90,7 +90,9 @@ def _humanize(value, number=None) -> str:
 
     # Ensure input is numeric
     if not isinstance(value, (int, float)):
-        raise TypeError(f"Value must be int or float, got {type(value).__name__}")
+        raise TypeError(
+            f"Value must be int or float, got {type(value).__name__}"
+        )
 
     # Negative values are represented as "0"
     if value <= 0:
@@ -109,10 +111,12 @@ def _humanize(value, number=None) -> str:
         text = humanize.intword(value, formatter)
         text = text.replace(" thousand", "K")
         text = text.replace(" million", "M")
+        text = text.replace(" billion", "B")
 
-        # Remove trailing .0 for K
+        # Remove trailing .0 for K, M, and B
         text = text.replace(".0K", "K")
         text = text.replace(".0M", "M")
+        text = text.replace(".0B", "B")
 
         return text
 
@@ -196,9 +200,9 @@ def _merge_data(
     # Iteratively merge the remaining datasets
     for data in full_data[1:]:
         # Check if all merge columns exist in both datasets
-        if not set(columns).issubset(data.columns) or not set(columns).issubset(
-            merged.columns
-        ):
+        if not set(columns).issubset(data.columns) or not set(
+            columns
+        ).issubset(merged.columns):
             raise KeyError(
                 f"Merge columns {columns} not found in one of the DataFrames."
             )
