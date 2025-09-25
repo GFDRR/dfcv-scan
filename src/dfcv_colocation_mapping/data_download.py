@@ -288,8 +288,8 @@ class DatasetManager:
 
         # Load acled conflict data
         logging.info("Loading ACLED conflict data...")
-        self.acled, self.acled_raw = self.download_acled()
-        self.acled_agg, _ = self.download_acled(aggregate=True)
+        self.acled = self.download_acled()
+        self.acled_agg = self.download_acled(aggregate=True)
 
         # Load ucdp conflict data
         logging.info("Loading UCDP conflict data...")
@@ -1187,6 +1187,7 @@ class DatasetManager:
                     response = requests.get(
                         acled_url, headers=headers, params=params
                     )
+                    print(response.url)
                     subdata = pd.DataFrame(response.json()["data"])
                     data.append(subdata)
                     len_subdata = len(subdata)
@@ -1237,8 +1238,8 @@ class DatasetManager:
 
         # Read ACLED data from file
         try:
-            acled_raw = gpd.read_file(raw_file).to_crs(self.crs)
-            acled = self._filter_acled(acled_raw)
+            self.acled_raw = gpd.read_file(raw_file).to_crs(self.crs)
+            acled = self._filter_acled(self.acled_raw)
             acled.to_file(filtered_file)
         except Exception as e:
             raise FileNotFoundError(
@@ -1251,7 +1252,7 @@ class DatasetManager:
                 acled_file=filtered_file, agg_file=agg_file
             )
 
-        return acled, acled_raw
+        return acled
 
     def _filter_acled(self, acled):
         mask = (
@@ -1723,13 +1724,13 @@ class DatasetManager:
                         zip_dir, grd_file.replace(".grd", ".tif")
                     )
                     os.system(
-                        f"gdal_translate -co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES -co NUM_THREADS=ALL_CPUS -a_srs EPSG:4326 {os.path.join(zip_dir, grd_file)} {tif_file}"
+                        f"gdal_translate -a_srs EPSG:4326 {os.path.join(zip_dir, grd_file)} {tif_file}"
                     )
             else:
                 tif_file = tif_files[0]
 
             os.system(
-                f"gdal_translate -co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES -co NUM_THREADS=ALL_CPUS -a_srs EPSG:4326 {os.path.join(zip_dir, tif_file)} {out_file}"
+                f"gdal_translate -a_srs EPSG:4326 {os.path.join(zip_dir, tif_file)} {out_file}"
             )
             shutil.rmtree(zip_dir)
 
