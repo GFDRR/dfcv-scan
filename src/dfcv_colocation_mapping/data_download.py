@@ -34,6 +34,10 @@ from dtmapi import DTMApi
 from scipy.stats.mstats import gmean
 from dfcv_colocation_mapping import data_utils
 
+from warnings import simplefilter
+
+simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
+
 ox.settings.max_query_area_size = 500000000000000
 logging.basicConfig(level=logging.INFO, force=True)
 
@@ -75,7 +79,6 @@ class DatasetManager:
         data_dir: str = "data",
         meter_crs: str = "EPSG:3857",
         crs: str = "EPSG:4326",
-        asset: str = "worldpop",
         global_name: str = "global",
         overwrite: bool = False,
         group: str = "Region",
@@ -85,6 +88,7 @@ class DatasetManager:
         acled_file: str = None,
         osm_config_file: str = None,
         adm_config_file: str = None,
+        download: bool = False,
     ):
         """Initialize a DatasetManager object for a given country.
 
@@ -95,15 +99,6 @@ class DatasetManager:
             acled_email (str, optional): ACLED account email. Defaults to None.
             conflict_start_date (str, optional): Conflict start date. This is set to 10 years ago from today if none. Defaults to None.
             conflict_end_date (str, optional): Conflict end date. This is set to the current date if none. Defaults to None.
-            acled_limit (str, optional): Dictionary specifying filter conditions on columns and sub-columns. Defaults to None.
-                Examples of limit dictionary value:
-                limit = {"disorder_type": {"Strategic developments": {"sub_event_type": ["Looting/property destruction", "Arrests"]}}}
-                limit = {"disorder_type": ["Demonstrations", "Political violence"]}
-            acled_exclude (str, optional): Dictionary specifying exclusion conditions on columns. Defaults to None.
-                Rows matching the specified values will be removed.
-                Example of exclude dictionary value:
-                exclude = {"disorder_type": ["Strategic developments"]}
-                exclude = {"sub_event_type": ["Peaceful protest"]}
             acled_country (str, optional): ACLED country code. Defaults to None.
             acled_name (str, optional): Label for ACLED dataset. Defaults to "acled".
             fathom_year (int, optional): Year for Fathom data. Defaults to 2020.
@@ -115,7 +110,6 @@ class DatasetManager:
             data_dir (str, optional): Base directory for storing data. Defaults to "data".
             meter_crs (str, optional): Projected CRS for distance-based calculations. Defaults to "EPSG:3857".
             crs (str, optional): Geographic CRS for the datasets. Defaults to "EPSG:4326".
-            asset (str, optional): Default asset layer name. Defaults to "worldpop".
             global_name (str, optional): Name of global data directory. Defaults to "global".
             overwrite (bool, optional): Whether to overwrite existing files. Defaults to False.
             group (str, optional): Grouping variable for administrative units. Defaults to "Region".
@@ -133,42 +127,24 @@ class DatasetManager:
         self.acled_file = acled_file
         self.meter_crs = meter_crs
         self.crs = crs
-        self.asset = asset
         self.overwrite = overwrite
 
         # Store ACLED credentials and filtering options
         self.acled_key = acled_key
-        self.acled_limit = acled_limit
-        self.acled_exclude = acled_exclude
         self.acled_country = acled_country
 
         # Store conflict start date and end date
-        self.conflict_start_date = conflict_start_date
-        self.conflict_end_date = conflict_end_date
+        self.conflict_start_date = self.get_start_date(
+            conflict_start_date, conflict_last_n_years
+        )
+        self.conflict_end_date = self.get_end_date(conflict_end_date)
 
-        if dtm_adm_level is None:
-            if int(self.adm_level[-1]) > 2:
-                dtm_adm_level = "ADM2"
-            else:
-                dtm_adm_level = self.adm_level
-
-        self.dtm_adm_level = dtm_adm_level
-        self.dtm_start_date = dtm_start_date
-        self.dtm_end_date = dtm_end_date
-
-        if self.conflict_start_date is None:
-            self.conflict_start_date = (
-                datetime.date.today() - relativedelta(years=conflict_last_n_years)
-            ).isoformat()
-        if self.conflict_end_date is None:
-            self.conflict_end_date = datetime.date.today().isoformat()
-
-        if self.dtm_start_date is None:
-            self.dtm_start_date = (
-                datetime.date.today() - relativedelta(years=dtm_last_n_years)
-            ).isoformat()
-        if self.dtm_end_date is None:
-            self.dtm_end_date = datetime.date.today().isoformat()
+        # Store IOM DTM information
+        self.dtm_adm_level = self.get_dtm_adm_level(dtm_adm_level)
+        self.dtm_start_date = self.get_start_date(
+            dtm_start_date, dtm_last_n_years
+        )
+        self.dtm_end_date = self.get_end_date(dtm_end_date)
 
         # Store Fathom flood layer parameters
         self.fathom_year = fathom_year
@@ -179,7 +155,7 @@ class DatasetManager:
 
         # Get country name from ISO Code
         self.country = pycountry.countries.get(alpha_3=self.iso_code).name
-        if self.iso_code == "COD":  # Edge case
+        if self.iso_code == "COD":
             self.country = "Democratic Republic of Congo"
         if self.country is None:
             raise ValueError(f"Invalid ISO code: {self.iso_code}")
@@ -207,6 +183,9 @@ class DatasetManager:
             self.acled_creds = data_utils.read_config(acled_file)
             self.acled_key = self.acled_creds["access_token"]
 
+        self.acled_filters = self.config["acled_filters"]
+        self.acled_hierarchy = self.config["acled_hierarchy"]
+
         # Load IOM DTM credentials from file if available
         self.dtm_key = dtm_key
         if os.path.exists(dtm_file):
@@ -229,14 +208,69 @@ class DatasetManager:
         os.makedirs(self.global_dir, exist_ok=True)
 
         # Build file path for asset layer
-        self.asset_file = self._build_filename(
-            iso_code, asset, self.local_dir, ext="tif"
-        )
-        self.admin_file = None
+        self.asset_files = self.get_asset_files()
 
+        self.adm_source = adm_source
+        self.admin_file = None
+        self.adm_config = data_utils.read_config(adm_config_file)
+
+        self.mhs_aggregation = mhs_aggregation
+
+        # Download all datasets
+        if download:
+            self.download_data()
+
+    def _cascade(self, category: str, values: list[str], operation: str):
+        """Cascade inclusion/exclusion down the hierarchy."""
+        opposite = "exclude" if operation == "include" else "include"
+
+        self.acled_filters[operation].setdefault(category, [])
+        self.acled_filters[opposite].setdefault(category, [])
+
+        for v in values:
+            # Move from opposite → operation
+            if v in self.acled_filters[opposite].get(category, []):
+                self.acled_filters[opposite][category].remove(v)
+                self.acled_filters[operation][category].append(v)
+
+            # Cascade down
+            if category == "disorder_type" and v in self.acled_hierarchy:
+                for evt, evt_dict in self.acled_hierarchy[v][
+                    "event_type"
+                ].items():
+                    self._cascade("event_type", [evt], operation)
+                    self._cascade(
+                        "sub_event_type", evt_dict["sub_event_type"], operation
+                    )
+
+            elif category == "event_type":
+                for disorder, disorder_dict in self.acled_hierarchy.items():
+                    if v in disorder_dict["event_type"]:
+                        sub_events = disorder_dict["event_type"][v][
+                            "sub_event_type"
+                        ]
+                        self._cascade("sub_event_type", sub_events, operation)
+
+    def set_acled_filters(
+        self, category: str, values: list[str], operation: str = "exclude"
+    ) -> dict:
+        """
+        Move values between include/exclude with cascading hierarchy.
+        operation: "exclude" or "include"
+        """
+        source = "include"
+        if operation != "exclude":
+            source = "exclude"
+
+        if category not in self.acled_filters[source]:
+            raise ValueError(f"{category} not in filters")
+
+        self._cascade(category, values, operation)
+        return self.acled_filters
+
+    def download_data(self):
         # Load geoboundaries, fallback to GADM if primary source fails
         logging.info(f"Loading {self.adm_level} geoboundaries...")
-        self.adm_source = adm_source
         self.geoboundary = self.download_geoboundary_with_attempts()
         self.merge_columns = list(self.geoboundary.columns)
 
@@ -248,43 +282,76 @@ class DatasetManager:
         self.fathom = self.download_fathom()
         self.hazards = self.download_datasets("hazard")
 
-        logging.info(
-            f"Downloading conflict data from {self.conflict_start_date} to {self.conflict_end_date}"
-        )
+        logging.info("Downloading conflict data...")
+        logging.info(f"Conflict start date: {self.conflict_start_date}")
+        logging.info(f"Conflict end date: {self.conflict_end_date}")
 
         # Load acled conflict data
         logging.info("Loading ACLED conflict data...")
-        self.acled = self.download_acled()
-        self.acled_agg = self.download_acled(aggregate=True)
+        self.acled, self.acled_raw = self.download_acled()
+        self.acled_agg, _ = self.download_acled(aggregate=True)
 
         # Load ucdp conflict data
         logging.info("Loading UCDP conflict data...")
         self.ucdp = self.download_ucdp()
         self.ucdp_agg = self.download_ucdp(aggregate=True)
 
-        logging.info(
-            f"Downloading displacement data from {self.dtm_start_date} to {self.dtm_end_date}"
-        )
         logging.info(f"Loading IOM DTM {self.adm_level} displacement data...")
-        self.dtm = self.download_dtm(dtm_adm_level)
+        logging.info(f"Displacement start date: {self.dtm_start_date}")
+        logging.info(f"Displacement end date: {self.dtm_end_date}")
+        self.dtm = self.download_dtm(self.dtm_adm_level)
 
         # Compute multi-hazard scores
         logging.info("Calculating scores...")
-        self.mhs_aggregation = mhs_aggregation
         self.data = self.combine_datasets()
         self.data = self.calculate_multihazard_score(self.data)
 
         # Load admin config and assign grouping
-        self.adm_config = data_utils.read_config(adm_config_file)
         self.data = self.assign_grouping()
 
         logging.info("Downloading OSM...")
         self.osm = self.download_osm()
 
+    def get_start_date(self, start_date, last_n_years):
+        if start_date is None:
+            start_date = (
+                datetime.date.today() - relativedelta(years=last_n_years)
+            ).isoformat()
+
+        return start_date
+
+    def get_end_date(self, end_date):
+        if end_date is None:
+            end_date = datetime.date.today().isoformat()
+
+        return end_date
+
+    def get_dtm_adm_level(self, dtm_adm_level):
+        if dtm_adm_level is None:
+            if int(self.adm_level[-1]) > 2:
+                dtm_adm_level = "ADM2"
+            else:
+                dtm_adm_level = self.adm_level
+
+        return dtm_adm_level
+
+    def get_asset_files(self):
+        asset_files = []
+
+        for asset in self.config["assets"]:
+            asset_file = self._build_filename(
+                self.iso_code, asset, self.local_dir, ext="tif"
+            )
+            asset_files.append(asset_file)
+
+        return asset_files
+
     def download_geoboundary_with_attempts(self, attempts: int = 3):
         for i in range(attempts):
             try:
-                return self.download_geoboundary(self.adm_source, self.adm_level)
+                return self.download_geoboundary(
+                    self.adm_source, self.adm_level
+                )
             except Exception as err:
                 logging.info(err)
                 logging.info(
@@ -364,7 +431,9 @@ class DatasetManager:
             for hazard in weights:
                 for category in categories:
                     if hazard in self.config["hazards"][category]:
-                        self.config["hazards"][category][hazard] = weights[hazard]
+                        self.config["hazards"][category][hazard] = weights[
+                            hazard
+                        ]
             logging.info(self.config["hazards"])
 
             # Recalculate multi-hazard scores in the dataset
@@ -372,7 +441,9 @@ class DatasetManager:
             return self.data
         else:
             # Raise error if consistency ratio exceeds threshold
-            raise ValueError(f"Consistency ratio {cr} > 0.10. Please try again.")
+            raise ValueError(
+                f"Consistency ratio {cr} > 0.10. Please try again."
+            )
 
     def assign_grouping(self):
         """Assigns a grouping to administrative units based on configuration.
@@ -423,7 +494,7 @@ class DatasetManager:
                 data.append(dataset)
 
         # Add IOM DTM data if available and non-empty
-        if self.dtm_adm_level == self.adm_level:
+        if self.dtm is not None and self.dtm_adm_level == self.adm_level:
             if len(self.dtm) > 0:
                 datasets.append(self.dtm)
 
@@ -450,6 +521,7 @@ class DatasetManager:
         data: gpd.GeoDataFrame,
         conflict_columns: list = ["wbg_acled", "ucdp"],
         suffixes: list = [
+            "exposure",
             "exposure_relative",
             "intensity_weighted_exposure_relative",
         ],
@@ -464,7 +536,7 @@ class DatasetManager:
         of all hazards. Optionally scales MHS with a conflict column.
 
         Args:
-            data (gpd.GeoDataFrame): Input GeoDataFrame containing hazard data.
+            data (gpd.GeoDataFrame, optional): Input GeoDataFrame containing hazard data.
             conflict_column (str, optional): Column name for conflict scaling.
                 Defaults to "wbg_conflict".
             suffixes (list, optional): List of suffixes for hazard columns to aggregate.
@@ -479,11 +551,12 @@ class DatasetManager:
         """
 
         # Ensure relative exposure columns exist for all hazard columns
-        for column in data.columns:
-            if "relative" not in column:
-                colname = f"{column}_relative"
-                if "exposure" in column and colname not in data.columns:
-                    data[colname] = data[column] / data[self.asset]
+        for asset in self.config["assets"]:
+            for column in data.columns:
+                if "relative" not in column and asset in column:
+                    colname = f"{column}_relative"
+                    if "exposure" in column and colname not in data.columns:
+                        data[colname] = data[column] / data[asset]
 
         # Loop through each suffix to calculate MHS
         for suffix in suffixes:
@@ -498,53 +571,73 @@ class DatasetManager:
             categories.append("all")
 
             for hazard_dict, category in zip(hazard_dicts, categories):
-                hazard_cols = [
-                    f"{hazard}_{self.asset}_{suffix}" if suffix else hazard
-                    for hazard in hazard_dict
-                    if (f"{hazard}_{self.asset}_{suffix}" if suffix else hazard)
-                    in data.columns
-                ]
+                for asset in self.config["assets"]:
+                    hazard_cols = [
+                        f"{hazard}_{asset}_{suffix}" if suffix else hazard
+                        for hazard in hazard_dict
+                        if (f"{hazard}_{asset}_{suffix}" if suffix else hazard)
+                        in data.columns
+                    ]
 
-                total_weight = sum(list(hazard_dict.values()))
-                weights = np.array([hazard_dict[hazard] for hazard in hazard_dict])
-                if total_weight > 0:
-                    weights = weights / total_weight
+                    total_weight = sum(list(hazard_dict.values()))
+                    weights = np.array(
+                        [hazard_dict[hazard] for hazard in hazard_dict]
+                    )
+                    if total_weight > 0:
+                        weights = weights / total_weight
 
-                # Select only columns that exist in data
-                hazard_cols = [col for col in hazard_cols if col in data.columns]
-                weights = weights[: len(hazard_cols)]
+                    # Select only columns that exist in data
+                    hazard_cols = [
+                        col for col in hazard_cols if col in data.columns
+                    ]
+                    weights = weights[: len(hazard_cols)]
 
-                # Compute MHS using vectorized operations
-                if self.mhs_aggregation == "power_mean":
-                    mhs = (data[hazard_cols] ** p).multiply(weights, axis=1).sum(
-                        axis=1
-                    ) ** (1 / p)
+                    # Compute MHS using vectorized operations
+                    if self.mhs_aggregation == "power_mean":
+                        mhs = (data[hazard_cols] ** p).multiply(
+                            weights, axis=1
+                        ).sum(axis=1) ** (1 / p)
 
-                elif self.mhs_aggregation == "geometric_mean":
-                    mhs = (data[hazard_cols] + epsilon).pow(weights).prod(axis=1)
+                    elif self.mhs_aggregation == "geometric_mean":
+                        mhs = (
+                            (data[hazard_cols] + epsilon)
+                            .pow(weights)
+                            .prod(axis=1)
+                        )
 
-                elif self.mhs_aggregation == "arithmetic_mean":
-                    mhs = data[hazard_cols].multiply(weights, axis=1).sum(axis=1)
+                    elif self.mhs_aggregation == "arithmetic_mean":
+                        mhs = (
+                            data[hazard_cols]
+                            .multiply(weights, axis=1)
+                            .sum(axis=1)
+                        )
 
-                # Add MHS column (scaled 0-1)
-                mhs_name = "mhs"
-                if suffix is not None:
-                    mhs_name = f"{mhs_name}_{category}_{self.asset}_{suffix}"
-                data[mhs_name] = data_utils._minmax_scale(mhs)
-
-                # Optionally scale MHS by conflict
-                for conflict_column in conflict_columns:
-                    mhsc_name = f"mhs_{category}_{conflict_column}"
-
+                    # Add MHS column (scaled 0-1)
+                    mhs_name = "mhs"
                     if suffix is not None:
-                        mhsc_name = f"{mhsc_name}_{self.asset}_{suffix}"
+                        mhs_name = f"{mhs_name}_{category}_{asset}_{suffix}"
+                    data[mhs_name] = data_utils._minmax_scale(mhs)
 
-                    for csuffix in suffixes:
-                        if f"{conflict_column}_{self.asset}_{csuffix}" in data.columns:
-                            conflict_scaled = data_utils._minmax_scale(
-                                data[f"{conflict_column}_{self.asset}_{csuffix}"]
-                            )
-                            data[mhsc_name] = data[mhs_name] * conflict_scaled
+                    # Optionally scale MHS by conflict
+                    for conflict_column in conflict_columns:
+                        mhsc_name = f"mhs_{category}_{conflict_column}"
+
+                        if suffix is not None:
+                            mhsc_name = f"{mhsc_name}_{asset}_{suffix}"
+
+                        for csuffix in suffixes:
+                            if (
+                                f"{conflict_column}_{asset}_{csuffix}"
+                                in data.columns
+                            ):
+                                conflict_scaled = data_utils._minmax_scale(
+                                    data[
+                                        f"{conflict_column}_{asset}_{csuffix}"
+                                    ]
+                                )
+                                data[mhsc_name] = (
+                                    data[mhs_name] * conflict_scaled
+                                )
 
         return data
 
@@ -636,14 +729,18 @@ class DatasetManager:
 
                     if not os.path.exists(intermediate_file):
                         # Try GBHumanitarian URL first
-                        url = f"{gbhumanitarian_url}{self.iso_code}/{adm_level}/"
+                        url = (
+                            f"{gbhumanitarian_url}{self.iso_code}/{adm_level}/"
+                        )
                         try:
                             r = requests.get(url)
                             download_path = r.json()["gjDownloadURL"]
                         except Exception:
                             # Fallback to GBOpen URL if GBHumanitarian URL fails
                             try:
-                                url = f"{gbopen_url}{self.iso_code}/{adm_level}/"
+                                url = (
+                                    f"{gbopen_url}{self.iso_code}/{adm_level}/"
+                                )
                                 r = requests.get(url)
                                 download_path = r.json()["gjDownloadURL"]
                             except Exception as e:
@@ -723,7 +820,9 @@ class DatasetManager:
                         axis=1,
                     )
                     joined["overlap_percentage"] = (
-                        joined["intersection_area"] / joined["geometry"].area * 100
+                        joined["intersection_area"]
+                        / joined["geometry"].area
+                        * 100
                     )
 
                     # Filter for the desired overlap percentage
@@ -766,9 +865,9 @@ class DatasetManager:
             admin_bounds = self.geoboundary.dissolve("iso_code")[
                 "geometry"
             ].envelope.values[0]
-            data = ox.features.features_from_polygon(admin_bounds, tags).to_crs(
-                self.meter_crs
-            )
+            data = ox.features.features_from_polygon(
+                admin_bounds, tags
+            ).to_crs(self.meter_crs)
             data.geometry = data.geometry.centroid
             data = data.to_crs(self.crs)
 
@@ -777,12 +876,16 @@ class DatasetManager:
 
         osm = gpd.GeoDataFrame(pd.concat(osm)).reset_index().to_crs(self.crs)
         try:
-            osm = osm.sjoin(self.geoboundary, how="left", predicate="intersects")
+            osm = osm.sjoin(
+                self.geoboundary, how="left", predicate="intersects"
+            )
             osm = osm.drop(["index_right"], axis=1)
         except Exception as e:
             raise ValueError(f"Spatial join failed: {e}")
 
-        osm = osm.rename(columns={"category": "osm_category", "amenity": "osm_amenity"})
+        osm = osm.rename(
+            columns={"category": "osm_category", "amenity": "osm_amenity"}
+        )
         osm.to_file(out_file, driver="GeoJSON")
         return osm
 
@@ -803,7 +906,9 @@ class DatasetManager:
             api = DTMApi(subscription_key=self.dtm_key)
             self.dtm_countries = api.get_all_countries()
 
-        if self.dtm_key and (self.overwrite or not os.path.exists(geojson_file)):
+        if self.dtm_key and (
+            self.overwrite or not os.path.exists(geojson_file)
+        ):
             try:
                 country_name = self.dtm_countries[
                     self.dtm_countries["admin0Pcode"] == self.iso_code
@@ -825,6 +930,7 @@ class DatasetManager:
                     adm_source="gadm", adm_level=dtm_adm_level
                 )
 
+            dtm_raw = None
             if dtm_adm_level == "ADM1":
                 dtm_raw = api.get_idp_admin1_data(
                     CountryName=country_name,
@@ -923,83 +1029,105 @@ class DatasetManager:
         ucdp = gpd.read_file(local_file)
 
         if aggregate:
+            ucdp_agg = None
             admin = self.geoboundary
-            exposure_raster = self._build_filename(
+
+            for asset, asset_file in zip(
+                self.config["assets"], self.asset_files
+            ):
+                column = f"{self.ucdp_name.lower()}_{asset}_exposure"
+                exposure_raster = self._build_filename(
+                    self.iso_code,
+                    f"{self.ucdp_name}_{asset}_exposure",
+                    self.local_dir,
+                    ext="tif",
+                )
+                exposure_vector = self._build_filename(
+                    self.iso_code,
+                    f"{self.ucdp_name}_{asset}_exposure_{self.adm_level}",
+                    self.local_dir,
+                    ext="geojson",
+                )
+
+                if self.overwrite or not os.path.exists(exposure_vector):
+                    out_tif = self._calculate_custom_conflict_exposure(
+                        local_file,
+                        asset_file,
+                        asset_name=asset,
+                        conflict_src="ucdp",
+                    )
+                    out_tif, _ = self._calculate_exposure(
+                        asset_file, out_tif, exposure_raster, threshold=1
+                    )
+
+                    data = self._calculate_zonal_stats(
+                        out_tif,
+                        column=column,
+                        stats_agg=["sum"],
+                        out_file=exposure_vector,
+                    )
+                    if data is None or data.empty:
+                        raise ValueError(
+                            "Exposure calculation failed or produced empty results."
+                        )
+
+                # Read exposure vector and clean zero values
+                ucdp_agg_sub = gpd.read_file(exposure_vector)
+                ucdp_agg_sub.loc[ucdp_agg_sub[column] == 0, column] = None
+
+                ucdp_agg = (
+                    ucdp_agg_sub
+                    if ucdp_agg is None
+                    else data_utils._merge_data(
+                        [ucdp_agg, ucdp_agg_sub], columns=self.merge_columns
+                    )
+                )
+
+            final_exposure_vector = self._build_filename(
                 self.iso_code,
-                f"{self.ucdp_name}_{self.asset}_exposure",
-                self.local_dir,
-                ext="tif",
-            )
-            exposure_vector = self._build_filename(
-                self.iso_code,
-                f"{self.ucdp_name}_{self.asset}_exposure_{self.adm_level}",
+                f"{self.ucdp_name}_exposure_{self.adm_level}",
                 self.local_dir,
                 ext="geojson",
             )
+            # Aggregate total conflict events
+            column = "conflict_count"
+            event_count = self._aggregate_data(
+                ucdp, agg_col=column, agg_func="count"
+            )
+            event_count = event_count.rename(
+                columns={column: f"ucdp_{column}"}
+            )
+            event_count = data_utils._merge_data(
+                [admin, event_count],
+                columns=[f"{self.adm_level}_ID"],
+                how="left",
+            )
 
-            if self.overwrite or not os.path.exists(exposure_vector):
-                out_tif = self._calculate_custom_conflict_exposure(
-                    local_file, conflict_src="ucdp"
-                )
-                out_tif, _ = self._calculate_exposure(
-                    out_tif, exposure_raster, threshold=1
-                )
-
-                column = f"{self.ucdp_name.lower()}_{self.asset}_exposure"
-                data = self._calculate_zonal_stats(
-                    out_tif,
-                    column=column,
-                    stats_agg=["sum"],
-                    out_file=exposure_vector,
-                )
-                if data is None or data.empty:
-                    raise ValueError(
-                        "Exposure calculation failed or produced empty results."
-                    )
-
-                # Read exposure vector and clean zero values
-                ucdp_agg = gpd.read_file(exposure_vector)
-                ucdp_agg.loc[ucdp_agg[column] == 0, column] = None
-
-                # Aggregate total conflict events
-                column = "conflict_count"
-                event_count = self._aggregate_data(
-                    ucdp, agg_col=column, agg_func="count"
-                )
-                event_count = event_count.rename(columns={column: f"ucdp_{column}"})
-                event_count = data_utils._merge_data(
-                    [admin, event_count],
-                    columns=[f"{self.adm_level}_ID"],
-                    how="left",
-                )
-
-                fatalities_count = self._aggregate_data(
-                    ucdp, agg_col="best", agg_func="sum"
-                )
-                fatalities_count = fatalities_count.rename(
-                    columns={"best": "ucdp_fatalities"}
-                )
-                fatalities_count = data_utils._merge_data(
-                    [admin, fatalities_count],
-                    columns=[f"{self.adm_level}_ID"],
-                    how="left",
-                )
-
-                ucdp = data_utils._merge_data(
-                    [event_count, fatalities_count, ucdp_agg],
-                    columns=self.merge_columns,
-                )
-
-                self._calculate_conflict_stats(ucdp, source="ucdp")
-
-                ucdp.to_file(exposure_vector)
-
-            ucdp = gpd.read_file(exposure_vector)
+            fatalities_count = self._aggregate_data(
+                ucdp, agg_col="best", agg_func="sum"
+            )
+            fatalities_count = fatalities_count.rename(
+                columns={"best": "ucdp_fatalities"}
+            )
+            fatalities_count = data_utils._merge_data(
+                [admin, fatalities_count],
+                columns=[f"{self.adm_level}_ID"],
+                how="left",
+            )
+            ucdp = data_utils._merge_data(
+                [event_count, fatalities_count, ucdp_agg],
+                columns=self.merge_columns,
+            )
+            self._calculate_conflict_stats(ucdp, source="ucdp")
+            ucdp.to_file(final_exposure_vector)
 
         return ucdp
 
     def download_acled(
-        self, population: str = "full", aggregate: bool = False
+        self,
+        population: str = "full",
+        aggregate: bool = False,
+        exposure_column: str = "population_best",
     ) -> gpd.GeoDataFrame:
         """Download ACLED conflict data and optionally aggregate to administrative units.
 
@@ -1020,8 +1148,14 @@ class DatasetManager:
         """
 
         # Build file paths
-        out_file = self._build_filename(
+        raw_file = self._build_filename(
             self.iso_code, self.acled_name, self.local_dir, ext="geojson"
+        )
+        filtered_file = self._build_filename(
+            self.iso_code,
+            f"{self.acled_name}_FILTERED",
+            self.local_dir,
+            ext="geojson",
         )
         agg_file = self._build_filename(
             self.iso_code,
@@ -1030,26 +1164,11 @@ class DatasetManager:
             ext="geojson",
         )
 
-        exposure_raster = self._build_filename(
-            self.iso_code,
-            f"{self.acled_name}_{self.asset}_exposure",
-            self.local_dir,
-            ext="tif",
-        )
-        exposure_vector = self._build_filename(
-            self.iso_code,
-            f"{self.acled_name}_{self.asset}_exposure_{self.adm_level}",
-            self.local_dir,
-            ext="geojson",
-        )
-
-        # Download ACLED data if needed
-        if self.overwrite or not os.path.exists(out_file):
+        # Download ACLED data
+        if self.overwrite or not os.path.exists(filtered_file):
             logging.info(f"Downloading ACLED data for {self.iso_code}...")
 
             params = dict(
-                # key=self.acled_key,
-                # email=self.acled_email,
                 country=self.country,
                 event_date=f"{self.conflict_start_date}|{self.conflict_end_date}",
                 event_date_where="BETWEEN",
@@ -1065,7 +1184,9 @@ class DatasetManager:
             while len_subdata != 0:
                 try:
                     logging.info(f"Reading ACLED page {params['page']}...")
-                    response = requests.get(acled_url, headers=headers, params=params)
+                    response = requests.get(
+                        acled_url, headers=headers, params=params
+                    )
                     subdata = pd.DataFrame(response.json()["data"])
                     data.append(subdata)
                     len_subdata = len(subdata)
@@ -1095,187 +1216,66 @@ class DatasetManager:
                 )
 
             # Clean and standardize columns
-            data["population_best"] = (
-                data["population_best"].replace({"": np.nan}).astype(np.float64)
-            )
-            data["disorder_type"] = data["disorder_type"].replace(
-                {
-                    "Political violence; Demonstrations": "Demonstrations",
-                }
-            )
-
-            data["type_of_violence"] = None
-            data["civilian_targeting"] = data["civilian_targeting"].replace("", None)
-            data.loc[
-                data["civilian_targeting"] == "Civilian targeting",
-                "type_of_violence",
-            ] = "One-sided violence"
-            data.loc[
-                data["inter1"].str.contains("Civilians")
-                | data["inter2"].str.contains("Civilians"),
-                "type_of_violence",
-            ] = "One-sided violence"
-            data.loc[
-                data["inter1"].str.contains("State")
-                | data["inter2"].str.contains("State"),
-                "type_of_violence",
-            ] = "State-based conflict"
-            data["type_of_violence"] = data["type_of_violence"].fillna(
-                "Non-state conflict"
-            )
-            data[["type_of_violence", "civilian_targeting", "inter1", "inter2"]][
-                data["type_of_violence"] == "State-based conflict"
-            ]
-
-            # Save to file
+            if exposure_column in data.columns:
+                data[exposure_column] = (
+                    data[exposure_column]
+                    .replace({"": np.nan})
+                    .astype(np.float64)
+                )
 
             # Spatial join ACLED events with admin boundaries
             try:
-                data = data.sjoin(self.geoboundary, how="left", predicate="intersects")
+                data = data.sjoin(
+                    self.geoboundary, how="left", predicate="intersects"
+                )
                 data = data.drop(["index_right"], axis=1)
             except Exception as e:
                 raise ValueError(f"Spatial join failed: {e}")
 
-            data.to_file(out_file)
-            logging.info(f"ACLED file saved to {out_file}.")
+            data.to_file(raw_file)
+            logging.info(f"ACLED file saved to {raw_file}.")
 
         # Read ACLED data from file
         try:
-            acled = gpd.read_file(out_file).to_crs(self.crs)
+            acled_raw = gpd.read_file(raw_file).to_crs(self.crs)
+            acled = self._filter_acled(acled_raw)
+            acled.to_file(filtered_file)
         except Exception as e:
-            raise FileNotFoundError(f"Failed to read ACLED file {out_file}: {str(e)}")
-
-        # Apply optional filters
-        if self.acled_limit is not None:
-            acled = self._limit_filter(acled, self.acled_limit)
-        if self.acled_exclude is not None:
-            acled = self._exclude_filter(acled, self.acled_exclude)
+            raise FileNotFoundError(
+                f"Failed to read ACLED file {raw_file}: {str(e)}"
+            )
 
         # Aggregate to admin units if requested
         if aggregate:
             acled = self._aggregate_acled(
-                acled_file=out_file,
-                agg_file=agg_file,
-                exposure_raster=exposure_raster,
-                exposure_vector=exposure_vector,
+                acled_file=filtered_file, agg_file=agg_file
             )
 
-        return acled
+        return acled, acled_raw
 
-    def _limit_filter(self, data: gpd.GeoDataFrame, limit: dict) -> gpd.GeoDataFrame:
-        """Filter a GeoDataFrame based on specified column or nested column conditions.
-
-        The `limit` dictionary allows filtering on columns directly or on nested subtypes.
-
-        Examples of `limit`:
-            limit = {
-                "disorder_type": {
-                    "Strategic developments": {
-                        "sub_event_type": ["Looting/property destruction", "Arrests"]
-                    }
-                }
-            }
-            limit = {"disorder_type": ["Demonstrations", "Political violence"]}
-
-        Args:
-            data (gpd.GeoDataFrame): Input GeoDataFrame to filter.
-            limit (dict): Dictionary specifying filter conditions on columns and sub-columns.
-
-        Returns:
-            gpd.GeoDataFrame: Filtered GeoDataFrame.
-
-        Raises:
-            ValueError: If the `limit` argument is not a dictionary.
-            KeyError: If a column or nested subtype specified in `limit` does not exist in `data`.
-        """
-
-        if limit is None:
-            return data
-
-        if not isinstance(limit, dict):
-            raise ValueError(
-                "`limit` must be a dictionary specifying filter conditions."
+    def _filter_acled(self, acled):
+        mask = (
+            acled["disorder_type"].isin(
+                self.acled_filters["include"].get("disorder_type", [])
             )
-
-        for column in limit:
-            if column not in data.columns:
-                raise KeyError(
-                    f"Column '{column}' specified in limit does not exist in the data."
-                )
-
-            # Handle nested filtering: column -> subtype -> subsubtype -> allowed values
-            if isinstance(limit[column], dict):
-                for subtype in limit[column]:
-                    if subtype not in data[column].unique():
-                        raise KeyError(
-                            f"Subtype '{subtype}' not found in column '{column}'."
-                        )
-
-                    # Split data into rows that match subtype and rows that don't
-                    temp1 = data[data[column] != subtype]
-                    temp2 = data[data[column] == subtype]
-
-                    # Iterate over subsubtypes and filter rows that match allowed values
-                    for subsubtype in limit[column][subtype]:
-                        subset = temp2[
-                            temp2[subsubtype].isin(limit[column][subtype][subsubtype])
-                        ]
-
-                # Combine filtered and unfiltered parts
-                data = gpd.GeoDataFrame(pd.concat([temp1, subset]))
-
-            # Handle direct list filtering
-            elif isinstance(limit[column], list):
-                data = data[data[column].isin(limit[column])]
-
-            else:
-                raise ValueError(f"Limit for column '{column}' must be a dict or list.")
-
-        return data
-
-    def _exclude_filter(self, data: gpd.GeoDataFrame, exclude: dict):
-        """Exclude rows from a GeoDataFrame based on specified column values.
-
-        Each key in the `exclude` dictionary specifies a column, and the corresponding
-        value is a list of values to exclude from that column.
-
-        Args:
-            data (gpd.GeoDataFrame): Input GeoDataFrame to filter.
-            exclude (dict): Dictionary specifying values to exclude per column.
-
-        Returns:
-            gpd.GeoDataFrame: Filtered GeoDataFrame with specified values removed.
-
-        Raises:
-            ValueError: If `exclude` is not a dictionary.
-            KeyError: If a column specified in `exclude` does not exist in the data.
-        """
-
-        if exclude is None:
-            return data
-
-        if not isinstance(exclude, dict):
-            raise ValueError(
-                "`exclude` must be a dictionary specifying values to exclude."
+            & acled["event_type"].isin(
+                self.acled_filters["include"].get("event_type", [])
             )
+            & acled["sub_event_type"].isin(
+                self.acled_filters["include"].get("sub_event_type", [])
+            )
+        )
 
-        for column in exclude:
-            if column not in data.columns:
-                raise KeyError(
-                    f"Column '{column}' specified in exclude does not exist in the data."
-                )
+        for cat in ["disorder_type", "event_type", "sub_event_type"]:
+            if cat in self.acled_filters["exclude"]:
+                mask &= ~acled[cat].isin(self.acled_filters["exclude"][cat])
 
-            # Remove rows where the column value matches any value in the exclude list
-            data = data[~data[column].isin(exclude[column])]
-
-        return data
+        return acled[mask]
 
     def _aggregate_acled(
         self,
         acled_file: str,
         agg_file: str,
-        exposure_raster: str,
-        exposure_vector: str,
         prefix: str = "wbg",
     ):
         """Aggregate ACLED data and calculate exposure at the administrative level.
@@ -1313,41 +1313,61 @@ class DatasetManager:
         agg = gpd.read_file(agg_file)
 
         # Calculate exposure vector if it does not exist
-        column = f"{self.acled_name.lower()}_{self.asset}_exposure"
-        if self.overwrite or not os.path.exists(exposure_vector):
-            acled_tif = self._calculate_custom_conflict_exposure(
-                acled_file, conflict_src="acled"
+        full_data = [agg]
+        for asset, asset_file in zip(self.config["assets"], self.asset_files):
+            exposure_raster = self._build_filename(
+                self.iso_code,
+                f"{self.acled_name}_{asset}_exposure",
+                self.local_dir,
+                ext="tif",
             )
-            out_tif, _ = self._calculate_exposure(
-                acled_tif, exposure_raster, threshold=1
+            exposure_vector = self._build_filename(
+                self.iso_code,
+                f"{self.acled_name}_{asset}_exposure_{self.adm_level}",
+                self.local_dir,
+                ext="geojson",
             )
 
-            data = self._calculate_zonal_stats(
-                out_tif,
-                column=column,
-                prefix=prefix,
-                stats_agg=["sum"],
-                out_file=exposure_vector,
-            )
-            if data is None or data.empty:
-                raise ValueError(
-                    "Exposure calculation failed or produced empty results."
+            column = f"{self.acled_name.lower()}_{asset}_exposure"
+            if self.overwrite or not os.path.exists(exposure_vector):
+                acled_tif = self._calculate_custom_conflict_exposure(
+                    acled_file,
+                    asset_file,
+                    asset_name=asset,
+                    conflict_src="acled",
                 )
+                out_tif, _ = self._calculate_exposure(
+                    asset_file, acled_tif, exposure_raster, threshold=1
+                )
+                subdata = self._calculate_zonal_stats(
+                    out_tif,
+                    column=column,
+                    prefix=prefix,
+                    stats_agg=["sum"],
+                    out_file=exposure_vector,
+                )
+                if subdata is None or subdata.empty:
+                    raise ValueError(
+                        "Exposure calculation failed or produced empty results."
+                    )
 
-        # Read exposure vector and clean zero values
-        exposure_var = prefix + "_" + column
-        exposure = gpd.read_file(exposure_vector)
-        exposure.loc[exposure[exposure_var] == 0, exposure_var] = None
+            # Read exposure vector and clean zero values
+            exposure_var = prefix + "_" + column
+            exposure = gpd.read_file(exposure_vector)
+            exposure.loc[exposure[exposure_var] == 0, exposure_var] = None
+            full_data.append(exposure)
 
         # Merge aggregated ACLED and exposure data
-        acled = data_utils._merge_data([agg, exposure], columns=self.merge_columns)
+        acled = data_utils._merge_data(full_data, columns=self.merge_columns)
 
         return acled
 
     def _calculate_custom_conflict_exposure(
         self,
         conflict_file: str,
-        conflict_src: str = "acled",
+        asset_file: str,
+        asset_name: str,
+        conflict_src: str,
         temp_name: str = "temp",
         buffer_size: int = 3000,
         meter_crs: str = "EPSG:3857",
@@ -1372,7 +1392,9 @@ class DatasetManager:
         """
         # Check that the conflict file exists
         if not os.path.exists(conflict_file):
-            raise FileNotFoundError(f"conflict file not found: {conflict_file}")
+            raise FileNotFoundError(
+                f"conflict file not found: {conflict_file}"
+            )
 
         # Helper function to determine buffer size based on event type and fatalities
         def get_buffer_size(event, fatality):
@@ -1387,7 +1409,7 @@ class DatasetManager:
         # Create temporary buffered GeoJSON filename
         filename = (
             os.path.basename(conflict_file).split(".")[0]
-            + f"_{temp_name.upper()}.geojson"
+            + f"_{asset_name.upper()}_{temp_name.upper()}.geojson"
         )
         temp_file = os.path.join(self.local_dir, filename)
 
@@ -1409,20 +1431,23 @@ class DatasetManager:
             data["geometry"] = data.to_crs(meter_crs).apply(
                 lambda x: x.geometry.buffer(x.buffer_size), axis=1
             )
-            data = data.set_crs(meter_crs, allow_override=True).to_crs(self.crs)
+            data = data.set_crs(meter_crs, allow_override=True).to_crs(
+                self.crs
+            )
             data.to_file(temp_file)
             logging.info(f"Temporary file saved to {temp_file}.")
 
         # Define output raster path
         out_file = os.path.join(
-            self.local_dir, conflict_file.replace(".geojson", ".tif")
+            self.local_dir,
+            conflict_file.replace(".geojson", f"_{asset_name.upper()}.tif"),
         )
 
         # Rasterize if raster does not exist
         if self.overwrite or not os.path.exists(out_file):
             try:
                 # Create empty raster based on asset template
-                with rio.open(self.asset_file) as src:
+                with rio.open(asset_file) as src:
                     out_image = src.read(1)
                     out_image = np.zeros(out_image.shape)
 
@@ -1480,7 +1505,9 @@ class DatasetManager:
             agg_col="population_best",
             agg_func=lambda x: _nansumwrapper(x),
         )
-        pop_sum = pop_sum.rename(columns={"population_best": "acled_population_best"})
+        pop_sum = pop_sum.rename(
+            columns={"population_best": "acled_population_best"}
+        )
 
         # Aggregate total conflict events
         event_count = self._aggregate_data(
@@ -1524,7 +1551,8 @@ class DatasetManager:
         # Calculate population-weighted conflict exposure
         exposure_var = "acled_exposure"
         acled[exposure_var] = acled["acled_population_best"] / (
-            acled["acled_conflict_count"] - acled["acled_null_conflict_count"].fillna(0)
+            acled["acled_conflict_count"]
+            - acled["acled_null_conflict_count"].fillna(0)
         )
         acled.loc[acled[exposure_var] == 0, exposure_var] = None
 
@@ -1536,9 +1564,9 @@ class DatasetManager:
         return acled
 
     def _calculate_conflict_stats(self, data, source: str = "acled"):
-        data[f"{source}_fatalities_per_conflict"] = data[f"{source}_fatalities"].div(
-            data[f"{source}_conflict_count"]
-        )
+        data[f"{source}_fatalities_per_conflict"] = data[
+            f"{source}_fatalities"
+        ].div(data[f"{source}_conflict_count"])
         data[f"{source}_fatalities_per_conflict"] = data[
             f"{source}_fatalities_per_conflict"
         ].replace([np.inf, -np.inf], np.nan)
@@ -1606,12 +1634,16 @@ class DatasetManager:
                 logging.info(f"Downloading {url}...")
                 try:
                     if url.endswith(".zip"):
-                        self.download_zip(url, dataset, out_file=global_file, ext=ext)
+                        self.download_zip(
+                            url, dataset, out_file=global_file, ext=ext
+                        )
                     elif url.endswith(".tif"):
                         # urllib.request.urlretrieve(url, global_file)
                         self._download_url_progress(url, global_file)
                 except Exception as e:
-                    raise RuntimeError(f"Failed to download {dataset} from {url}: {e}")
+                    raise RuntimeError(
+                        f"Failed to download {dataset} from {url}: {e}"
+                    )
 
             # Clip raster to country boundary if applicable
             local_file = self._build_filename(
@@ -1629,7 +1661,9 @@ class DatasetManager:
             )
             if self.overwrite or not os.path.exists(local_file):
                 if url.endswith(".zip"):
-                    self.download_zip(url, dataset, out_file=local_file, ext=ext)
+                    self.download_zip(
+                        url, dataset, out_file=local_file, ext=ext
+                    )
                 if url.endswith(".tif"):
                     # urllib.request.urlretrieve(url, local_file)
                     self._download_url_progress(url, local_file)
@@ -1672,38 +1706,47 @@ class DatasetManager:
 
         if ext == "tif":
             # Look for GeoTIFF files
-            tif_files = [file for file in os.listdir(zip_dir) if file.endswith(".tif")]
+            tif_files = [
+                file for file in os.listdir(zip_dir) if file.endswith(".tif")
+            ]
 
             if len(tif_files) == 0:
                 # If no .tif, convert .grd file to GeoTIFF using GDAL
                 grd_files = [
-                    file for file in os.listdir(zip_dir) if file.endswith(".grd")
+                    file
+                    for file in os.listdir(zip_dir)
+                    if file.endswith(".grd")
                 ]
                 if len(grd_files) > 0:
                     grd_file = grd_files[0]
-                    tif_file = os.path.join(zip_dir, grd_file.replace(".grd", ".tif"))
+                    tif_file = os.path.join(
+                        zip_dir, grd_file.replace(".grd", ".tif")
+                    )
                     os.system(
-                        f"gdal_translate -a_srs EPSG:4326 {os.path.join(zip_dir, grd_file)} {tif_file}"
+                        f"gdal_translate -co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES -co NUM_THREADS=ALL_CPUS -a_srs EPSG:4326 {os.path.join(zip_dir, grd_file)} {tif_file}"
                     )
             else:
                 tif_file = tif_files[0]
 
-            # shutil.copyfile(os.path.join(zip_dir, tif_file), out_file)
             os.system(
-                f"gdal_translate -a_srs EPSG:4326 {os.path.join(zip_dir, tif_file)} {out_file}"
+                f"gdal_translate -co TILED=YES -co COMPRESS=LZW -co BIGTIFF=YES -co NUM_THREADS=ALL_CPUS -a_srs EPSG:4326 {os.path.join(zip_dir, tif_file)} {out_file}"
             )
             shutil.rmtree(zip_dir)
 
         elif ext == "geojson":
             # Look for GeoJSON files
             geojson_files = [
-                file for file in os.listdir(zip_dir) if file.endswith(".geojson")
+                file
+                for file in os.listdir(zip_dir)
+                if file.endswith(".geojson")
             ]
 
             # If no .geojson, convert from .json feature collection
             if len(geojson_files) == 0:
                 json_file = [
-                    file for file in os.listdir(zip_dir) if file.endswith(".json")
+                    file
+                    for file in os.listdir(zip_dir)
+                    if file.endswith(".json")
                 ][0]
                 json_file = os.path.join(zip_dir, json_file)
                 with open(json_file, encoding="utf-8") as data:
@@ -1722,7 +1765,9 @@ class DatasetManager:
             shutil.rmtree(zip_dir)
 
         elif ext == "csv":
-            csv_files = [file for file in os.listdir(zip_dir) if file.endswith(".csv")]
+            csv_files = [
+                file for file in os.listdir(zip_dir) if file.endswith(".csv")
+            ]
             shutil.copyfile(os.path.join(zip_dir, csv_files[0]), out_file)
 
         else:
@@ -1739,7 +1784,9 @@ class DatasetManager:
 
         logging.info(f"Downloading global flood data from {url}")
         links = [
-            link["href"] for link in data.find_all("a") if "depth.tif" in link["href"]
+            link["href"]
+            for link in data.find_all("a")
+            if "depth.tif" in link["href"]
         ]
         for link in tqdm(links, total=len(links)):
             out_file = os.path.join(out_dir, link)
@@ -1750,7 +1797,9 @@ class DatasetManager:
         global_file = os.path.join(self.global_dir, f"{name.upper()}.tif")
 
         if not os.path.exists(global_file):
-            logging.info("Generating flood map. Hang tight, this might take a while...")
+            logging.info(
+                "Generating flood map. Hang tight, this might take a while..."
+            )
             self._merge_tifs(f"{out_dir}/*.tif", vrt_file, global_file)
             logging.info(f"Flood map saved to {global_file}.")
 
@@ -1820,7 +1869,9 @@ class DatasetManager:
                         f"1in{self.fathom_rp}",
                     )
                     merged_file = os.path.join(fathom_dir, f"{name}.vrt")
-                    self._merge_tifs(f"{flood_dir}/*.tif", merged_file, raw_tif_file)
+                    self._merge_tifs(
+                        f"{flood_dir}/*.tif", merged_file, raw_tif_file
+                    )
 
                 # Clip raster to admin boundary
                 admin = self.geoboundary.dissolve(by="iso_code")
@@ -1828,62 +1879,70 @@ class DatasetManager:
                 self._clip_raster(raw_tif_file, proc_tif_file, admin, nodata)
 
                 # Build exposure rasters
-                exposure_file = self._build_filename(
-                    self.iso_code,
-                    f"{folder}_{self.asset}_exposure",
-                    self.local_dir,
-                    ext="tif",
-                )
-                weighted_exposure_file = self._build_filename(
-                    self.iso_code,
-                    f"{folder}_{self.asset}_intensity_weighted_exposure",
-                    self.local_dir,
-                    ext="tif",
-                )
-
-                self._generate_exposure(
-                    proc_tif_file,
-                    exposure_file,
-                    self.config["threshold"][folder.lower()],
-                )
-
-                # Custom flood metric: share of pixels > threshold
-                def custom(x):
-                    return np.sum(x > self.fathom_threshold) / x.size
-
-                add_stats = {"custom": custom}
-
-                # Zonal statistics for hazard intensity
-                data = self._calculate_zonal_stats(
-                    proc_tif_file,
-                    column=folder.lower(),
-                    add_stats=add_stats,
-                )
-
-                full_data = (
-                    data
-                    if full_data is None
-                    else data_utils._merge_data(
-                        [full_data, data], columns=self.merge_columns
+                full_data = None
+                for asset, asset_file in zip(
+                    self.config["assets"], self.asset_files
+                ):
+                    exposure_file = self._build_filename(
+                        self.iso_code,
+                        f"{folder}_{asset}_exposure",
+                        self.local_dir,
+                        ext="tif",
                     )
-                )
+                    weighted_exposure_file = self._build_filename(
+                        self.iso_code,
+                        f"{folder}_{asset}_intensity_weighted_exposure",
+                        self.local_dir,
+                        ext="tif",
+                    )
 
-                # Add exposure zonal statistics
-                if os.path.exists(exposure_file):
-                    exposure = self._calculate_zonal_stats(
+                    self._generate_exposure(
+                        asset,
+                        asset_file,
+                        proc_tif_file,
                         exposure_file,
+                        self.config["threshold"][folder.lower()],
+                    )
+
+                    # Custom flood metric: share of pixels > threshold
+                    def custom(x):
+                        return np.sum(x > self.fathom_threshold) / x.size
+
+                    add_stats = {"custom": custom}
+
+                    # Zonal statistics for hazard intensity
+                    data = self._calculate_zonal_stats(
+                        proc_tif_file,
                         column=folder.lower(),
-                        suffix=f"{self.asset}_exposure",
+                        add_stats=add_stats,
                     )
-                    weighted_exposure = self._calculate_zonal_stats(
-                        weighted_exposure_file,
-                        column=folder.lower(),
-                        suffix=f"{self.asset}_intensity_weighted_exposure",
-                    )
-                    full_data = data_utils._merge_data(
-                        [full_data, exposure, weighted_exposure],
-                        columns=self.merge_columns,
-                    )
+
+                    # Merge into cumulative dataset
+                    if full_data is None:
+                        full_data = data.copy()
+                    elif not set(data.columns).issubset(
+                        set(full_data.columns)
+                    ):
+                        full_data = data_utils._merge_data(
+                            [full_data, data], columns=self.merge_columns
+                        )
+
+                    # Add exposure zonal statistics
+                    if os.path.exists(exposure_file):
+                        exposure = self._calculate_zonal_stats(
+                            exposure_file,
+                            column=folder.lower(),
+                            suffix=f"{asset}_exposure",
+                        )
+                        weighted_exposure = self._calculate_zonal_stats(
+                            weighted_exposure_file,
+                            column=folder.lower(),
+                            suffix=f"{asset}_intensity_weighted_exposure",
+                        )
+                        data_utils._merge_data(
+                            [full_data, exposure, weighted_exposure],
+                            columns=self.merge_columns,
+                        )
 
             # Save processed Fathom dataset
             full_data.to_file(full_data_file)
@@ -1912,7 +1971,9 @@ class DatasetManager:
             full_data = None
 
             for index, dataset in enumerate(datasets):
-                logging.info(f"({index+1}/{len(datasets)}) Processing {dataset}...")
+                logging.info(
+                    f"({index+1}/{len(datasets)}) Processing {dataset}..."
+                )
 
                 # Download raster dataset (GeoTIFF)
                 if (
@@ -1929,62 +1990,71 @@ class DatasetManager:
                 dataset_name = dataset.replace("global_", "")
 
                 # File paths for derived exposures
-                exposure_file = self._build_filename(
-                    self.iso_code,
-                    f"{dataset_name}_{self.asset}_exposure",
-                    self.local_dir,
-                    ext="tif",
-                )
-                weighted_exposure_file = self._build_filename(
-                    self.iso_code,
-                    f"{dataset_name}_{self.asset}_intensity_weighted_exposure",
-                    self.local_dir,
-                    ext="tif",
-                )
+                for asset, asset_file in zip(
+                    self.config["assets"], self.asset_files
+                ):
+                    exposure_file = self._build_filename(
+                        self.iso_code,
+                        f"{dataset_name}_{asset}_exposure",
+                        self.local_dir,
+                        ext="tif",
+                    )
+                    weighted_exposure_file = self._build_filename(
+                        self.iso_code,
+                        f"{dataset_name}_{asset}_intensity_weighted_exposure",
+                        self.local_dir,
+                        ext="tif",
+                    )
 
-                # Generate exposure rasters (skip asset rasters)
-                if dataset not in self.config["asset_data"]:
-                    self._generate_exposure(
+                    # Generate exposure rasters (skip asset rasters)
+                    if dataset not in self.config["asset_data"]:
+                        self._generate_exposure(
+                            asset,
+                            asset_file,
+                            local_file,
+                            exposure_file,
+                            self.config["threshold"][dataset],
+                        )
+
+                    # Decide on aggregation method
+                    if dataset in self.config["asset_data"]:
+                        stats_agg = ["sum"]
+                    else:
+                        stats_agg = ["mean"]
+
+                    # Zonal statistics for base hazard raster
+                    data = self._calculate_zonal_stats(
                         local_file,
-                        exposure_file,
-                        self.config["threshold"][dataset],
-                    )
-
-                # Decide on aggregation method
-                stats_agg = ["sum"] if dataset == "worldpop" else ["mean"]
-
-                # Zonal statistics for base hazard raster
-                data = self._calculate_zonal_stats(
-                    local_file,
-                    column=dataset_name,
-                    stats_agg=stats_agg,
-                )
-
-                # Merge into cumulative dataset
-                full_data = (
-                    data
-                    if full_data is None
-                    else data_utils._merge_data(
-                        [full_data, data], columns=self.merge_columns
-                    )
-                )
-
-                # Add exposure statistics if available
-                if os.path.exists(exposure_file):
-                    exposure = self._calculate_zonal_stats(
-                        exposure_file,
                         column=dataset_name,
-                        suffix=f"{self.asset}_exposure",
+                        stats_agg=stats_agg,
                     )
-                    weighted_exposure = self._calculate_zonal_stats(
-                        weighted_exposure_file,
-                        column=dataset_name,
-                        suffix=f"{self.asset}_intensity_weighted_exposure",
-                    )
-                    full_data = data_utils._merge_data(
-                        [full_data, exposure, weighted_exposure],
-                        columns=self.merge_columns,
-                    )
+
+                    # Merge into cumulative dataset
+                    if full_data is None:
+                        full_data = data.copy()
+                    elif not set(data.columns).issubset(
+                        set(full_data.columns)
+                    ):
+                        full_data = data_utils._merge_data(
+                            [full_data, data], columns=self.merge_columns
+                        )
+
+                    # Add exposure statistics if available
+                    if os.path.exists(exposure_file):
+                        exposure = self._calculate_zonal_stats(
+                            exposure_file,
+                            column=dataset_name,
+                            suffix=f"{asset}_exposure",
+                        )
+                        weighted_exposure = self._calculate_zonal_stats(
+                            weighted_exposure_file,
+                            column=dataset_name,
+                            suffix=f"{asset}_intensity_weighted_exposure",
+                        )
+                        full_data = data_utils._merge_data(
+                            [full_data, exposure, weighted_exposure],
+                            columns=self.merge_columns,
+                        )
 
             # Save merged hazard dataset
             full_data.to_file(full_data_file)
@@ -1996,7 +2066,12 @@ class DatasetManager:
         return full_data
 
     def _generate_exposure(
-        self, local_file: str, exposure_file: str, threshold: float
+        self,
+        asset: str,
+        asset_file: str,
+        local_file: str,
+        exposure_file: str,
+        threshold: float,
     ) -> None:
         """
         Generate an exposure raster by resampling the input raster and applying a threshold.
@@ -2016,26 +2091,35 @@ class DatasetManager:
         """
         # Ensure the input raster exists before proceeding
         if not os.path.exists(local_file):
-            raise FileNotFoundError(f"Input raster file not found: {local_file}")
-
-        # Define the path for the resampled version of the input raster
-        resampled_file = local_file.replace(".tif", "_RESAMPLED.tif")
+            raise FileNotFoundError(
+                f"Input raster file not found: {local_file}"
+            )
 
         # Only generate exposure if it hasn't already been computed
         if self.overwrite or not os.path.exists(exposure_file):
+            resampled_file = local_file.replace(
+                ".tif", f"_{asset.upper()}_RESAMPLED.tif"
+            )
+
             # Resample raster if resampled version does not already exist
             if self.overwrite or not os.path.exists(resampled_file):
                 try:
-                    self._resample_raster(local_file, resampled_file)
+                    self._resample_raster(
+                        asset_file, local_file, resampled_file
+                    )
                 except Exception as e:
                     raise RuntimeError(f"Failed to resample raster: {e}")
 
             try:
-                self._calculate_exposure(resampled_file, exposure_file, threshold)
+                self._calculate_exposure(
+                    asset_file, resampled_file, exposure_file, threshold
+                )
             except Exception as e:
                 raise RuntimeError(f"Failed to calculate exposure: {e}")
 
-    def _resample_raster(self, in_file: str, out_file: str) -> str:
+    def _resample_raster(
+        self, asset_file: str, in_file: str, out_file: str
+    ) -> str:
         """
         Resample a raster file to match the resolution and bounds of the asset raster.
 
@@ -2056,13 +2140,14 @@ class DatasetManager:
         # Check that both the input file and the reference asset file exist
         if not os.path.exists(in_file):
             raise FileNotFoundError(f"Input raster file not found: {in_file}")
-        if not os.path.exists(self.asset_file):
-            raise FileNotFoundError(f"Asset file not found: {self.asset_file}")
+
+        if not os.path.exists(asset_file):
+            raise FileNotFoundError(f"Asset file not found: {asset_file}")
 
         # Open the asset raster (reference for resolution and bounds)
-        asset = gdal.Open(self.asset_file, 0)
+        asset = gdal.Open(asset_file, 0)
         if asset is None:
-            raise RuntimeError(f"Failed to open asset raster: {self.asset_file}")
+            raise RuntimeError(f"Failed to open asset raster: {asset_file}")
 
         # Extract geotransform info: resolution and bounding box
         geoTransform = asset.GetGeoTransform()
@@ -2092,7 +2177,11 @@ class DatasetManager:
         return out_file
 
     def _calculate_exposure(
-        self, hazard_file: str, exposure_file: str, threshold: float
+        self,
+        asset_file: str,
+        hazard_file: str,
+        exposure_file: str,
+        threshold: float,
     ) -> tuple[str, str]:
         """
         Calculate exposure and intensity-weighted exposure rasters.
@@ -2115,13 +2204,18 @@ class DatasetManager:
         """
         # Ensure both hazard and asset rasters exist
         if not os.path.exists(hazard_file):
-            raise FileNotFoundError(f"Hazard raster file not found: {hazard_file}")
-        if not os.path.exists(self.asset_file):
-            raise FileNotFoundError(f"Asset raster file not found: {self.asset_file}")
+            raise FileNotFoundError(
+                f"Hazard raster file not found: {hazard_file}"
+            )
+
+        if not os.path.exists(asset_file):
+            raise FileNotFoundError(
+                f"Asset raster file not found: {asset_file}"
+            )
 
         # Open both asset and hazard rasters
         with (
-            rio.open(self.asset_file, "r") as src1,
+            rio.open(asset_file, "r") as src1,
             rio.open(hazard_file, "r") as src2,
         ):
             # Asset raster values
@@ -2214,7 +2308,9 @@ class DatasetManager:
             agg_name = adm_level
 
         if agg_func != "count" and agg_col is None:
-            raise ValueError("agg_col must be provided when agg_func is not 'count'.")
+            raise ValueError(
+                "agg_col must be provided when agg_func is not 'count'."
+            )
 
         # Perform aggregation
         if agg_func == "count":
@@ -2271,7 +2367,9 @@ class DatasetManager:
 
         # Ensure the GeoDataFrame contains at least one geometry
         if admin.empty:
-            raise ValueError("Admin GeoDataFrame is empty. Cannot perform clipping.")
+            raise ValueError(
+                "Admin GeoDataFrame is empty. Cannot perform clipping."
+            )
 
         # Return existing raster if the clipped file already exists
         if not os.path.exists(local_tif):
@@ -2301,7 +2399,7 @@ class DatasetManager:
                         "height": out_image.shape[1],
                         "width": out_image.shape[2],
                         "transform": out_transform,
-                        "nodata": -1,
+                        "nodata": int(-1),
                     }
                 )
 
@@ -2357,7 +2455,9 @@ class DatasetManager:
 
         # Generate default output path if not provided
         if out_file is None:
-            out_file = os.path.join(self.local_dir, f"{name}_{self.adm_level}.geojson")
+            out_file = os.path.join(
+                self.local_dir, f"{name}_{self.adm_level}.geojson"
+            )
 
         if self.overwrite or not os.path.exists(out_file):
             admin_file = self.admin_file
@@ -2430,4 +2530,6 @@ class DatasetManager:
             )
 
         # Construct and return the full file path
-        return os.path.join(out_dir, f"{prefix.upper()}_{suffix.upper()}.{ext}")
+        return os.path.join(
+            out_dir, f"{prefix.upper()}_{suffix.upper()}.{ext}"
+        )
