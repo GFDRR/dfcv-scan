@@ -1,3 +1,4 @@
+import re
 import os
 import math
 import warnings
@@ -38,12 +39,14 @@ from sklearn.cluster import DBSCAN
 from geopy.distance import great_circle
 from shapely.geometry import MultiPoint
 
-from dfcv_colocation_mapping import data_utils
+from src.dfcv_colocation_mapping import data_utils
 from vincenty import vincenty
 
 
 class GeoPlot:
-    def __init__(self, dm, data_dir: str = "data/", map_config_file: str = None):
+    def __init__(
+        self, dm, data_dir: str = "data/", map_config_file: str = None
+    ):
         """
         Initializes a GeoPlot instance.
 
@@ -152,8 +155,9 @@ class GeoPlot:
         config = self.map_config[key]
 
         # Default variable title
+        asset = self.get_asset(var)
         if var_title is None:
-            var_title = self._get_title(var, "var_titles").title()
+            var_title = self._get_title(var, "var_titles", asset=asset)
 
         if data is None:
             data = self.data.copy()
@@ -168,7 +172,9 @@ class GeoPlot:
             raise ValueError(f"Variable '{var}' not found in data columns.")
 
         # Get centroid of the country for map centering
-        centroid = data.dissolve("iso_code").to_crs(config["meter_crs"]).centroid
+        centroid = (
+            data.dissolve("iso_code").to_crs(config["meter_crs"]).centroid
+        )
         transformer = pyproj.Transformer.from_crs(
             pyproj.CRS(config["meter_crs"]),
             pyproj.CRS(original_crs),
@@ -279,6 +285,8 @@ class GeoPlot:
         if not os.path.exists(raster_file):
             raise FileNotFoundError(f"Raster file not found: {raster_file}")
 
+        asset = self.get_asset(raster_name)
+
         # Create figure and axis
         fig, ax = plt.subplots(
             figsize=(config["figsize_x"], config["figsize_y"]),
@@ -332,7 +340,9 @@ class GeoPlot:
         )
 
         if legend_title is None:
-            legend_title = self._get_title(raster_name, "legend_titles")
+            legend_title = self._get_title(
+                raster_name, "legend_titles", asset=asset, legend=True
+            )
 
         # Add title to colorbar
         cbar.ax.set_title(
@@ -356,13 +366,14 @@ class GeoPlot:
         if title is None:
             # country = pycountry.countries.get(alpha_3=iso_code).name
             country = self.dm.country
-            var_title = self._get_title(raster_name, "var_titles").title()
+            var_title = self._get_title(raster_name, "var_titles", asset=asset)
             title = config["title"].format(var_title, country)
         if annotation is None:
             annotation = self._get_annotation([raster_name], add_adm=False)
         else:
             annotation = (
-                self._get_annotation([raster_name], add_adm=False) + f"{annotation}\n"
+                self._get_annotation([raster_name], add_adm=False)
+                + f"{annotation}\n"
             )
 
         # Add titles and annotations with layout adjusted to legend
@@ -480,12 +491,16 @@ class GeoPlot:
                 subdata["lon"] = subdata.geometry.x
                 subdata["lat"] = subdata.geometry.y
                 subdata["group"] = None
-                coords = set([tuple(x) for x in subdata[["lat", "lon"]].values])
+                coords = set(
+                    [tuple(x) for x in subdata[["lat", "lon"]].values]
+                )
 
                 clusters = []
                 while len(coords):
                     locus = coords.pop()
-                    cluster = [x for x in coords if vincenty(locus, x) <= distance]
+                    cluster = [
+                        x for x in coords if vincenty(locus, x) <= distance
+                    ]
                     clusters.append(cluster + [locus])
                     for x in cluster:
                         coords.remove(x)
@@ -510,7 +525,9 @@ class GeoPlot:
                     groups.append(global_index)
                     global_index += 1
 
-                points = pd.DataFrame({"lon": lons, "lat": lats, "group": groups})
+                points = pd.DataFrame(
+                    {"lon": lons, "lat": lats, "group": groups}
+                )
                 points = gpd.GeoDataFrame(
                     points,
                     geometry=gpd.points_from_xy(points["lon"], points["lat"]),
@@ -529,11 +546,15 @@ class GeoPlot:
                 )
                 handles.append(handle)
 
-                counts = pd.DataFrame(subdata["group"].value_counts()).reset_index()
+                counts = pd.DataFrame(
+                    subdata["group"].value_counts()
+                ).reset_index()
                 points = points.merge(counts, on="group")
                 all_points.append(points)
 
-            all_points = gpd.GeoDataFrame(pd.concat(all_points), geometry="geometry")
+            all_points = gpd.GeoDataFrame(
+                pd.concat(all_points), geometry="geometry"
+            )
             all_points = all_points.sort_values(by="count", ascending=False)
 
             max_count = all_points["count"].max()
@@ -676,7 +697,9 @@ class GeoPlot:
 
                     label_x = center_x + max_r + 5
 
-                    for s, lbl in sorted(zip(self.sizes, self.labels), reverse=True):
+                    for s, lbl in sorted(
+                        zip(self.sizes, self.labels), reverse=True
+                    ):
                         r = s / 2
                         c = Circle(
                             (center_x, bottom_y + r),
@@ -988,11 +1011,17 @@ class GeoPlot:
 
         # Ensure data is not empty
         if data.empty:
-            raise ValueError("Data is empty. Cannot plot bivariate choropleth.")
+            raise ValueError(
+                "Data is empty. Cannot plot bivariate choropleth."
+            )
         # Ensure both variables exist
         for var in [var1, var2]:
             if var not in data.columns:
-                raise ValueError(f"Variable '{var}' not found in self.data columns.")
+                raise ValueError(
+                    f"Variable '{var}' not found in self.data columns."
+                )
+
+        asset = asset = self.get_asset(var)
 
         data = data.to_crs(config["crs"])
 
@@ -1011,7 +1040,9 @@ class GeoPlot:
         if zoom_to is not None:
             data = []
             for key, value in zoom_to.items():
-                selected = self.data[self.data[key].isin([value])].to_crs(config["crs"])
+                selected = self.data[self.data[key].isin([value])].to_crs(
+                    config["crs"]
+                )
                 data.append(selected)
 
             data = gpd.GeoDataFrame(pd.concat(data), geometry="geometry")
@@ -1026,17 +1057,21 @@ class GeoPlot:
                 data[var2], nbins, labels=range(nbins), retbins=True
             )
         elif binning == "equal_intervals":
-            var1_categories, var1_bins = self._cut(data[var1], var1_bounds, nbins)
-            var2_categories, var2_bins = self._cut(data[var2], var2_bounds, nbins)
+            var1_categories, var1_bins = self._cut(
+                data[var1], var1_bounds, nbins
+            )
+            var2_categories, var2_bins = self._cut(
+                data[var2], var2_bounds, nbins
+            )
 
         var1_edges = list(var1_bins)
         var2_edges = list(var2_bins)
 
         # Assign bivariate categories and colormap
         data_plot = data.copy()
-        data_plot["bivariate"] = var1_categories.astype("str") + var2_categories.astype(
+        data_plot["bivariate"] = var1_categories.astype(
             "str"
-        )
+        ) + var2_categories.astype("str")
         cmap = config[f"cmap{nbins}"]
 
         # Build color lookup dictionary
@@ -1064,9 +1099,13 @@ class GeoPlot:
 
         # Plot dissolved outline (national boundary)
         if dissolved_zoomed is not None:
-            dissolved_zoomed.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none")
+            dissolved_zoomed.plot(
+                ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none"
+            )
         else:
-            dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none")
+            dissolved.plot(
+                ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none"
+            )
 
         ax.axis("off")
 
@@ -1125,14 +1164,18 @@ class GeoPlot:
         var1_labels = [data_utils._humanize(x) for x in var1_edges]
         var2_labels = [data_utils._humanize(x) for x in var2_edges]
         tickpos = np.linspace(0, 1, nbins + 1)
-        ax2.set_xticks(tickpos, var1_labels, fontsize=config["legend_fontsize"])
-        ax2.set_yticks(tickpos, var2_labels, fontsize=config["legend_fontsize"])
+        ax2.set_xticks(
+            tickpos, var1_labels, fontsize=config["legend_fontsize"]
+        )
+        ax2.set_yticks(
+            tickpos, var2_labels, fontsize=config["legend_fontsize"]
+        )
 
         # Legend axis titles
         if legend1_title is None:
-            legend1_title = self._get_title(var1, "legend_titles")
+            legend1_title = self._get_title(var1, "legend_titles", asset=asset)
         if legend2_title is None:
-            legend2_title = self._get_title(var2, "legend_titles")
+            legend2_title = self._get_title(var2, "legend_titles", asset=asset)
 
         ax2.set_xlabel(legend1_title, fontsize=6, ha="left")
         ax2.yaxis.set_label_coords(-0.35, 0)
@@ -1147,9 +1190,9 @@ class GeoPlot:
 
         # Build titles and annotations
         if var1_title is None:
-            var1_title = self._get_title(var1, "var_titles").title()
+            var1_title = self._get_title(var1, "var_titles", asset=asset)
         if var2_title is None:
-            var2_title = self._get_title(var2, "var_titles").title()
+            var2_title = self._get_title(var2, "var_titles", asset=asset)
         if annotation is None:
             annotation = self._get_annotation([var1, var2])
         else:
@@ -1256,14 +1299,19 @@ class GeoPlot:
         if data.empty:
             raise ValueError("self.data is empty. Cannot plot choropleth.")
         if var not in data.columns:
-            raise ValueError(f"Variable '{var}' not found in self.data columns.")
+            raise ValueError(
+                f"Variable '{var}' not found in self.data columns."
+            )
 
         # ISO code for country labeling
         data = data.to_crs(config["crs"])
 
         # Determine legend title
+        asset = self.get_asset(var)
         if legend_title is None:
-            legend_title = self._get_title(var, "legend_titles")
+            legend_title = self._get_title(
+                var, "legend_titles", asset=asset, legend=True
+            )
 
         # Create figure and axis
         fig, ax = plt.subplots(
@@ -1277,7 +1325,9 @@ class GeoPlot:
                 colors=config["colormap"], cmap_type=config["cmap_type"]
             )
         else:
-            cmap = pypalettes.load_cmap(config["cmap"], cmap_type=config["cmap_type"])
+            cmap = pypalettes.load_cmap(
+                config["cmap"], cmap_type=config["cmap_type"]
+            )
 
         # Dissolve geometries for plotting boundaries
         dissolved = data.dissolve("iso_code")
@@ -1288,7 +1338,9 @@ class GeoPlot:
         if zoom_to is not None:
             data = []
             for key, value in zoom_to.items():
-                selected = self.data[self.data[key].isin([value])].to_crs(config["crs"])
+                selected = self.data[self.data[key].isin([value])].to_crs(
+                    config["crs"]
+                )
                 if selected.empty:
                     raise ValueError(f"{value} is not in {key}.")
                 data.append(selected)
@@ -1305,7 +1357,7 @@ class GeoPlot:
             }
 
         # Convert relative variables to percentages
-        if "relative" in var:
+        if "relative" in var and "index" not in legend_title.lower():
             data[var] = data[var] * 100
 
         # Determine min/max bounds
@@ -1322,7 +1374,9 @@ class GeoPlot:
         if data[var].nunique() == 1:
             # Transform value and get color
             unique_value = data[var].dropna().unique()[0]
-            cmap_value = unique_value / 100 if "relative" in var else unique_value
+            cmap_value = (
+                unique_value / 100 if "relative" in var else unique_value
+            )
             color = cmap(cmap_value) if 0 <= cmap_value <= 1 else cmap(0.5)
 
             # Plot single-color map
@@ -1362,10 +1416,12 @@ class GeoPlot:
             tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
             xpos = tight_bbox_fig.x0
 
-        if config["legend_type"] == "default":
+        elif config["legend_type"] == "default":
             # Transform value and get color
             unique_value = data[var].dropna().unique()[0]
-            cmap_value = unique_value / 100 if "relative" in var else unique_value
+            cmap_value = (
+                unique_value / 100 if "relative" in var else unique_value
+            )
             color = cmap(cmap_value) if 0 <= cmap_value <= 1 else cmap(0.5)
 
             # Plot single-color map
@@ -1446,8 +1502,12 @@ class GeoPlot:
             iax.set_position([cbar_x, cbar_y, cbar_width, cbar_height])
 
             iax.tick_params(labelsize=config["legend_label_fontsize"])
-            iax.set_title(legend_title, fontsize=config["legend_title_fontsize"])
-            iax.yaxis.set_major_formatter(mticker.FuncFormatter(data_utils._humanize))
+            iax.set_title(
+                legend_title, fontsize=config["legend_title_fontsize"]
+            )
+            iax.yaxis.set_major_formatter(
+                mticker.FuncFormatter(data_utils._humanize)
+            )
 
             # Determine left position of legend for alignment
             tight_bbox = iax.get_tightbbox(fig.canvas.get_renderer())
@@ -1462,11 +1522,17 @@ class GeoPlot:
 
             # Different x and y position depending on zoom mode
             if zoom_to is not None:
-                barplot_y = ax_pos.y0 + 2 * (ax_pos.height - barplot_height) / 5
+                barplot_y = (
+                    ax_pos.y0 + 2 * (ax_pos.height - barplot_height) / 5
+                )
             else:
-                barplot_y = ax_pos.y0 + 4 * (ax_pos.height - barplot_height) / 5
+                barplot_y = (
+                    ax_pos.y0 + 4 * (ax_pos.height - barplot_height) / 5
+                )
 
-            barplot_x = ax_pos.x0 - 2 * barplot_width + config["barplot_x_offset"]
+            barplot_x = (
+                ax_pos.x0 - 2 * barplot_width + config["barplot_x_offset"]
+            )
             barplot_y += config["barplot_y_offset"]
 
             # Create inset axis for histogram barplot
@@ -1486,9 +1552,13 @@ class GeoPlot:
             y_ticks = bins[:-1] + bin_width / 2
 
             # Map bins to colors using cmap
-            colors = [cmap((val - min(bins)) / (max(bins) - min(bins))) for val in bins]
+            colors = [
+                cmap((val - min(bins)) / (max(bins) - min(bins)))
+                for val in bins
+            ]
             color_mapping = {
-                category: color for category, color in zip(range(nbins), colors)
+                category: color
+                for category, color in zip(range(nbins), colors)
             }
             color_mapping[-1] = config["missing_color"]
 
@@ -1505,7 +1575,9 @@ class GeoPlot:
             )
 
             # Draw histogram bars in inset axis
-            n = iax.hist(data[var], bins=bins, orientation="horizontal", alpha=0)[0]
+            n = iax.hist(
+                data[var], bins=bins, orientation="horizontal", alpha=0
+            )[0]
             iax.barh(y_ticks, n, height=bin_width, color=colors)
 
             # Format y-axis ticks with bin ranges
@@ -1573,9 +1645,13 @@ class GeoPlot:
 
         # Plot boundaries (zoomed or full)
         if dissolved_zoomed is not None:
-            dissolved_zoomed.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none")
+            dissolved_zoomed.plot(
+                ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none"
+            )
         else:
-            dissolved.plot(ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none")
+            dissolved.plot(
+                ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none"
+            )
 
         # Plot missing data and legend
         if data[var].isnull().any():
@@ -1584,7 +1660,7 @@ class GeoPlot:
 
         # Get variable legend title texts
         if var_title is None:
-            var_title = self._get_title(var, "var_titles")  # .title()
+            var_title = self._get_title(var, "var_titles", asset=asset)
 
         # Get annotation text
         if annotation is None:
@@ -1740,7 +1816,9 @@ class GeoPlot:
 
         # Validation checks
         if data.empty:
-            raise ValueError("`data` GeoDataFrame is empty — cannot plot tiny map.")
+            raise ValueError(
+                "`data` GeoDataFrame is empty — cannot plot tiny map."
+            )
         if dissolved.empty:
             raise ValueError(
                 "`dissolved` GeoDataFrame is empty — cannot plot tiny map."
@@ -1775,7 +1853,9 @@ class GeoPlot:
         iax.set_axis_off()
 
         # Plot background (dissolved country) and highlight the selected region
-        dissolved.plot(ax=iax, facecolor="lightgray", edgecolor="lightgray", lw=1)
+        dissolved.plot(
+            ax=iax, facecolor="lightgray", edgecolor="lightgray", lw=1
+        )
         data.dissolve("iso_code").plot(
             ax=iax, facecolor="bisque", edgecolor="sienna", lw=0.25
         )
@@ -1843,16 +1923,20 @@ class GeoPlot:
 
         if subtitle is None:
             if "conflict" in title.lower():
-                start_date = datetime.strptime(self.dm.conflict_start_date, "%Y-%m-%d")
-                end_date = datetime.strptime(self.dm.conflict_end_date, "%Y-%m-%d")
+                start_date = datetime.strptime(
+                    self.dm.conflict_start_date, "%Y-%m-%d"
+                )
+                end_date = datetime.strptime(
+                    self.dm.conflict_end_date, "%Y-%m-%d"
+                )
                 subtitle = f"Conflict events from {start_date.year} to {end_date.year}"
 
             if "idp" in title.lower():
-                start_date = datetime.strptime(self.dm.dtm_start_date, "%Y-%m-%d")
-                end_date = datetime.strptime(self.dm.dtm_end_date, "%Y-%m-%d")
-                subtitle = (
-                    f"Displacement events from {start_date.year} to {end_date.year}"
+                start_date = datetime.strptime(
+                    self.dm.dtm_start_date, "%Y-%m-%d"
                 )
+                end_date = datetime.strptime(self.dm.dtm_end_date, "%Y-%m-%d")
+                subtitle = f"Displacement events from {start_date.year} to {end_date.year}"
 
         # Add subtitle (if provided)
         if subtitle is not None:
@@ -1907,73 +1991,99 @@ class GeoPlot:
                 font=self.regular_font,
             )
 
-    def _get_title(self, var: str, config_key: str) -> str:
+    def _get_title(
+        self,
+        var: str,
+        config_key: str,
+        asset: str = None,
+        legend: bool = False,
+        mhs_name: str = "Multi-Hazard",
+        conflict_name: str = "Conflict",
+    ) -> str:
         """
         Generate a formatted legend title for a given variable based on configuration.
 
         Args:
             var (str): Variable name to match against legend title keys.
             config_key (str): Key in ``self.map_config`` containing legend title mappings.
+            asset (str, optional): Asset type for exposure-related variables.
+            legend (bool, optional): If True, append extra legend text for BEM variables.
 
         Returns:
-            str: The formatted legend title string. Defaults to a title-cased
-            version of the variable name with " Risk" appended if no match is found.
+            str: The formatted legend title string. Falls back to a title-cased version
+                 of the variable name with " Risk" appended if no match is found.
 
         Raises:
             AttributeError: If ``self.map_config`` does not contain the given
                 ``config_key``.
         """
 
-        def capitalize(s: str) -> str:
-            words = s.split()
-            return " ".join(
-                w if any(c.isupper() for c in w[1:]) else w.capitalize() for w in words
+        def smart_capitalize(s: str) -> str:
+            """Capitalize words unless they already contain uppercase letters, preserving newlines."""
+
+            def cap_word(w: str) -> str:
+                return w if any(c.isupper() for c in w[1:]) else w.capitalize()
+
+            # Split by spaces but preserve newlines
+            tokens = re.split(r"(\s+)", s)
+            return "".join(
+                cap_word(tok) if tok.strip() and not tok.isspace() else tok
+                for tok in tokens
             )
 
         if config_key not in self.map_config:
             raise AttributeError(f"`map_config` must contain '{config_key}'.")
 
-        # Retrieve legend title mappings from map_config
         legend_titles = self.map_config[config_key]
 
-        # Try to match the variable with legend title keys
-        for key, title in legend_titles.items():
-            if key == var:  # Exact match
-                return title
-            elif key in var:
-                # Partial match with special cases
-                if var.startswith("mhs"):
-                    category = var.split("_")[1]
-                    fill = ""
-                    if category != "all":
-                        fill = category.title() + " "
-                    if "acled" in var or "ucdp" in var:
-                        title = title.format(fill + "Multi-Hazard Conflict")
-                    else:
-                        title = title.format(fill + "Multi-Hazard")
-                    return title
+        asset_name = None
+        if asset in self.map_config["asset_alias"]:
+            asset_name = self.map_config["asset_alias"][asset]
 
-                if "exposure" in var.lower():
-                    var = var.replace("_" + self.dm.asset, "")
-                    var = var.replace(self.dm.asset, "")
+        for key, template in legend_titles.items():
+            if key == var:
+                return template
 
-                if "acled" in var or "ucdp" in var:
-                    return title.format("conflict")
+            if key not in var:
+                continue
 
-                elif "mhs" in var:
-                    return title.format("multi-hazard")
+            if var.startswith("mhs"):
+                category = var.split("_")[1]
+                fill = "" if category == "all" else f"{category.title()}"
+                if any(tag in var for tag in ("acled", "ucdp")):
+                    return template.format(
+                        asset_name, f"{fill} {mhs_name} {conflict_name}"
+                    )
 
-                else:
-                    # Generic replacement for hazard names
-                    inp = var.replace("_" + key, "").replace("_", " ")
-                    return capitalize(title.format(inp))
+                if legend:
+                    template.format(f"{fill}{mhs_name}", asset_name)
+                return template.format(asset_name, f"{fill}{mhs_name}")
+
+            title = var
+            if "exposure" in var and asset:
+                title = title.replace(f"_{asset}", "").replace(asset, "")
+            if "acled" in var or "ucdp" in var:
+                title = template.format(asset_name, conflict_name)
+            else:
+                title = title.replace(f"_{key}", "").replace("_", " ")
+                title = template.format(asset_name, title)
+
+            title = smart_capitalize(title)
+
+            if legend and "bem" in var and "relative" not in var:
+                title += "\n(Total US Dollars)"
+
+            return title
 
         if "_" in var or "type" in var:
-            var = var.replace("_", " ").title()
-            return capitalize(var)
+            title = smart_capitalize(var.replace("_", " ").title())
+        else:
+            title = smart_capitalize(f"{var} Risk")
 
-        # Fallback: return variable as a title-cased string with "Risk"
-        return capitalize(var + " Risk")
+        if legend and "bem" in var:
+            title += "\nTotal US Dollar"
+
+        return title
 
     def _get_annotation(self, var_list: list = [], add_adm: bool = True):
         """
@@ -2001,7 +2111,9 @@ class GeoPlot:
 
         # Ensure map_config contains "annotations"
         if "annotations" not in self.map_config:
-            raise AttributeError("`map_config` must contain an 'annotations' key.")
+            raise AttributeError(
+                "`map_config` must contain an 'annotations' key."
+            )
 
         annotations = self.map_config["annotations"]
         annotation = "Source: \n"
@@ -2054,7 +2166,9 @@ class GeoPlot:
 
         if var_bounds is not None:
             if len(var_bounds) < 2:
-                raise ValueError("`var_bounds` must contain at least two elements.")
+                raise ValueError(
+                    "`var_bounds` must contain at least two elements."
+                )
 
             # Generate bin edges based on user input or linear spacing
             var_bins = get_bins(var_bounds, nbins)
@@ -2075,7 +2189,9 @@ class GeoPlot:
                 include_lowest=True,
             )
 
-    def _get_text_height(self, fig: plt.Figure, text: str, fontsize: float) -> float:
+    def _get_text_height(
+        self, fig: plt.Figure, text: str, fontsize: float
+    ) -> float:
         """
         Computes the relative height of a text string within a Matplotlib figure.
 
@@ -2098,7 +2214,9 @@ class GeoPlot:
                 f"`fig` must be a matplotlib.figure.Figure, got {type(fig).__name__}"
             )
         if not isinstance(text, str):
-            raise TypeError(f"`text` must be a string, got {type(text).__name__}")
+            raise TypeError(
+                f"`text` must be a string, got {type(text).__name__}"
+            )
         if not isinstance(fontsize, (int, float)):
             raise TypeError(
                 f"`fontsize` must be a number, got {type(fontsize).__name__}"
@@ -2118,3 +2236,10 @@ class GeoPlot:
 
         # Return text height relative to figure height
         return bbox.height / fig.bbox.height
+
+    def get_asset(self, var):
+        asset = None
+        for asset_name in self.dm.config["assets"]:
+            if asset_name in var:
+                return asset_name
+        return asset
