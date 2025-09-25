@@ -2237,6 +2237,7 @@ class DatasetManager:
             # Scale hazard values to [0, 1] for weighting
             asset_binary = asset.copy()
             asset_binary[asset_binary > 0] = 1
+            asset_binary, hazard = data_utils.match_shape(asset_binary, hazard)
             hazard_scaled = data_utils._minmax_scale(hazard * asset_binary)
 
             # Binary raster: hazard above threshold = 1, else 0

@@ -34,6 +34,30 @@ def get_exposure(dm, exposure):
         return "intensity_weighted_exposure_relative"
 
 
+def match_shape(src1: np.ndarray, src2: np.ndarray) -> np.ndarray:
+    """Align `src2` to the shape of `src1` by cropping or zero-padding."""
+    src1_rows, src1_cols = src1.shape
+    src2_rows, src2_cols = src2.shape
+
+    # Crop to src1 shape
+    rows = min(src1_rows, src2_rows)
+    cols = min(src1_cols, src2_cols)
+    aligned = src2[:rows, :cols]
+
+    # Pad if needed
+    if aligned.shape != (src1_rows, src1_cols):
+        pad_rows = src1_rows - aligned.shape[0]
+        pad_cols = src1_cols - aligned.shape[1]
+        aligned = np.pad(
+            aligned,
+            ((0, pad_rows), (0, pad_cols)),
+            mode="constant",
+            constant_values=0,
+        )
+
+    return aligned
+
+
 def _minmax_scale(data: pd.Series) -> pd.Series:
     """
     Performs Min-Max scaling on a NumPy array or Pandas Series, scaling values to [0, 1].
