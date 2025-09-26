@@ -16,16 +16,16 @@ from shapely.geometry import Polygon, MultiPolygon
 logging.basicConfig(level=logging.INFO)
 
 
-def get_conflict_source(dm, conflict_exposure_source):
+def get_conflict_source(conflict_exposure_source):
     if conflict_exposure_source == "ACLED (population_best)":
         return "acled"
     elif conflict_exposure_source == "ACLED (WBG calculation)":
-        return f"wbg_acled_{dm.asset}"
+        return "wbg_acled"
     elif conflict_exposure_source == "UCDP":
-        return f"ucdp_{dm.asset}"
+        return "ucdp"
 
 
-def get_exposure(dm, exposure):
+def get_exposure(exposure):
     if exposure == "absolute":
         return "exposure"
     elif exposure == "relative":
@@ -219,7 +219,7 @@ def _merge_data(
         )
 
     # Use the first dataset as the base
-    merged = full_data[0]
+    merged = full_data[0].copy()
 
     # Iteratively merge the remaining datasets
     for data in full_data[1:]:
@@ -231,7 +231,7 @@ def _merge_data(
                 f"Merge columns {columns} not found in one of the DataFrames."
             )
 
-        merged = pd.merge(merged, data, on=columns, how=how)
+        merged = pd.merge(merged.copy(), data, on=columns, how=how)
 
     # Ensure result is a GeoDataFrame if geometry column is preserved
     if "geometry" in columns:
