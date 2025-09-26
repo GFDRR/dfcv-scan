@@ -1416,6 +1416,9 @@ class GeoPlot:
             tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
             xpos = tight_bbox_fig.x0
 
+            iax = fig.add_axes(tight_bbox_fig)
+            iax.set_axis_off()
+
         elif config["legend_type"] == "default":
             # Transform value and get color
             unique_value = data[var].dropna().unique()[0]
