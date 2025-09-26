@@ -42,20 +42,20 @@ def match_shape(src1: np.ndarray, src2: np.ndarray) -> np.ndarray:
     # Crop to src1 shape
     rows = min(src1_rows, src2_rows)
     cols = min(src1_cols, src2_cols)
-    aligned = src2[:rows, :cols]
+    src2 = src2[:rows, :cols]
 
     # Pad if needed
-    if aligned.shape != (src1_rows, src1_cols):
-        pad_rows = src1_rows - aligned.shape[0]
-        pad_cols = src1_cols - aligned.shape[1]
-        aligned = np.pad(
-            aligned,
+    if src2.shape != (src1_rows, src1_cols):
+        pad_rows = src1_rows - src2.shape[0]
+        pad_cols = src1_cols - src2.shape[1]
+        src2 = np.pad(
+            src2,
             ((0, pad_rows), (0, pad_cols)),
             mode="constant",
             constant_values=0,
         )
 
-    return aligned
+    return src1, src2
 
 
 def _minmax_scale(data: pd.Series) -> pd.Series:
