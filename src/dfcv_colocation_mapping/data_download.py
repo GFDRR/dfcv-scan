@@ -154,11 +154,7 @@ class DatasetManager:
         self.jrc_version = jrc_version
 
         # Get country name from ISO Code
-        self.country = pycountry.countries.get(alpha_3=self.iso_code).name
-        if self.iso_code == "COD":
-            self.country = "Democratic Republic of Congo"
-        if self.country is None:
-            raise ValueError(f"Invalid ISO code: {self.iso_code}")
+        self.country = self.get_country_name()
 
         # Locate default configuration files if not provided
         resources = importlib_resources.files("dfcv_colocation_mapping")
@@ -250,6 +246,16 @@ class DatasetManager:
                             "sub_event_type"
                         ]
                         self._cascade("sub_event_type", sub_events, operation)
+
+    def get_country_name(self):
+        country = pycountry.countries.get(alpha_3=self.iso_code).name
+        if self.iso_code == "COD":
+            country = "Democratic Republic of Congo"
+        elif self.iso_code == "COG":
+            country = "Republic of Congo"
+        if country is None:
+            raise ValueError(f"Invalid ISO code: {self.iso_code}")
+        return country
 
     def set_acled_filters(
         self, category: str, values: list[str], operation: str = "exclude"
@@ -902,20 +908,20 @@ class DatasetManager:
             self.iso_code, f"DTM_{dtm_adm_level}", self.local_dir, ext="csv"
         )
 
-        if self.dtm_key is not None:
+        if self.dtm_key is None:
+            return
+        else:
             api = DTMApi(subscription_key=self.dtm_key)
             self.dtm_countries = api.get_all_countries()
 
-        if self.dtm_key and (
-            self.overwrite or not os.path.exists(geojson_file)
-        ):
+        if self.overwrite or not os.path.exists(geojson_file):
             try:
                 country_name = self.dtm_countries[
                     self.dtm_countries["admin0Pcode"] == self.iso_code
                 ]["admin0Name"].values[0]
             except Exception as e:
                 logging.info(e)
-                warnings.warn(f"{self.iso_code} not in DTM.")
+                warnings.warn(f"{self.iso_code} ({self.country}) not in DTM.")
                 return
 
             try:
@@ -1187,7 +1193,6 @@ class DatasetManager:
                     response = requests.get(
                         acled_url, headers=headers, params=params
                     )
-                    print(response.url)
                     subdata = pd.DataFrame(response.json()["data"])
                     data.append(subdata)
                     len_subdata = len(subdata)
