@@ -157,7 +157,9 @@ class GeoPlot:
         # Default variable title
         asset = self.get_asset(var)
         if var_title is None:
-            var_title = self._get_title(var, "var_titles", asset=asset)
+            var_title = self._get_title(
+                var, "var_titles", asset=asset, legend=True
+            )
 
         if data is None:
             data = self.data.copy()
@@ -1020,8 +1022,8 @@ class GeoPlot:
                 raise ValueError(
                     f"Variable '{var}' not found in self.data columns."
                 )
-
-        asset = asset = self.get_asset(var)
+        asset1 = self.get_asset(var1)
+        asset2 = self.get_asset(var2)
 
         data = data.to_crs(config["crs"])
 
@@ -1173,9 +1175,13 @@ class GeoPlot:
 
         # Legend axis titles
         if legend1_title is None:
-            legend1_title = self._get_title(var1, "legend_titles", asset=asset)
+            legend1_title = self._get_title(
+                var1, "legend_titles", asset=asset1
+            )
         if legend2_title is None:
-            legend2_title = self._get_title(var2, "legend_titles", asset=asset)
+            legend2_title = self._get_title(
+                var2, "legend_titles", asset=asset2
+            )
 
         ax2.set_xlabel(legend1_title, fontsize=6, ha="left")
         ax2.yaxis.set_label_coords(-0.35, 0)
@@ -1190,16 +1196,15 @@ class GeoPlot:
 
         # Build titles and annotations
         if var1_title is None:
-            var1_title = self._get_title(var1, "var_titles", asset=asset)
+            var1_title = self._get_title(var1, "var_titles", asset=asset1)
         if var2_title is None:
-            var2_title = self._get_title(var2, "var_titles", asset=asset)
+            var2_title = self._get_title(var2, "var_titles", asset=asset2)
         if annotation is None:
             annotation = self._get_annotation([var1, var2])
         else:
             annotation = self._get_annotation([var1, var2]) + f"{annotation}\n"
 
         country = self.dm.country
-        # country = pycountry.countries.get(alpha_3=iso_code).name
 
         # If zoomed, adjust titles and add tiny map
         if zoom_to is not None:
@@ -1218,26 +1223,17 @@ class GeoPlot:
                 x=xpos,
             )
 
-        # Helper to clean up duplicate words in titles
-        def get_names(
-            var1_title, var2_title, name: str, remove_from_latter: bool = True
-        ):
-            if name in var1_title.lower() and name in var2_title.lower():
-                if remove_from_latter:
-                    var2_title = var2_title.replace(name.title(), "").strip()
-                else:
-                    var1_title = var1_title.replace(name.title(), "").strip()
-            return var1_title, var2_title
+        def remove_duplicates(s1: str, s2: str) -> str:
+            """Merge two titles by removing shared prefix from the second string."""
+            words1, words2 = s1.split(), s2.split()
+            i = 0
+            while i < min(len(words1), len(words2)) and words1[i] == words2[i]:
+                i += 1
+            if i == 0:  # no shared prefix
+                return s1, s2
+            return s1, " ".join(words2[i:])
 
-        var1_title, var2_title = get_names(
-            var1_title, var2_title, "relative", remove_from_latter=True
-        )
-        var1_title, var2_title = get_names(
-            var1_title, var2_title, "absolute", remove_from_latter=True
-        )
-        var1_title, var2_title = get_names(
-            var1_title, var2_title, "exposure", remove_from_latter=False
-        )
+        var1_title, var2_title = remove_duplicates(var1_title, var2_title)
 
         # Get title text
         if title is None:
@@ -2000,7 +1996,7 @@ class GeoPlot:
         config_key: str,
         asset: str = None,
         legend: bool = False,
-        mhs_name: str = "Multi-Hazard",
+        mhs_name: str = "Multihazard",
         conflict_name: str = "Conflict",
     ) -> str:
         """
@@ -2022,17 +2018,52 @@ class GeoPlot:
         """
 
         def smart_capitalize(s: str) -> str:
-            """Capitalize words unless they already contain uppercase letters, preserving newlines."""
+            """Capitalize words unless they contain uppercase letters.
+            Skip common small words (to, from, is, etc.) unless first/last.
+            """
+            small = {
+                "a",
+                "an",
+                "and",
+                "as",
+                "at",
+                "but",
+                "by",
+                "for",
+                "from",
+                "in",
+                "nor",
+                "of",
+                "on",
+                "or",
+                "so",
+                "the",
+                "to",
+                "up",
+                "yet",
+                "is",
+            }
 
-            def cap_word(w: str) -> str:
-                return w if any(c.isupper() for c in w[1:]) else w.capitalize()
-
-            # Split by spaces but preserve newlines
             tokens = re.split(r"(\s+)", s)
-            return "".join(
-                cap_word(tok) if tok.strip() and not tok.isspace() else tok
-                for tok in tokens
-            )
+            words = [t for t in tokens if t.strip() and not t.isspace()]
+
+            def cap_word(w, i):
+                lw = w.lower()
+                if any(c.isupper() for c in w[1:]):
+                    return w
+                if 0 < i < len(words) - 1 and lw in small:
+                    return lw
+                return w.capitalize()
+
+            wi = 0
+            out = []
+            for t in tokens:
+                if t.strip() and not t.isspace():
+                    out.append(cap_word(t, wi))
+                    wi += 1
+                else:
+                    out.append(t)
+            return "".join(out)
 
         if config_key not in self.map_config:
             raise AttributeError(f"`map_config` must contain '{config_key}'.")
@@ -2043,48 +2074,57 @@ class GeoPlot:
         if asset in self.map_config["asset_alias"]:
             asset_name = self.map_config["asset_alias"][asset]
 
+        title = None
         for key, template in legend_titles.items():
-            if key == var:
-                return template
-
             if key not in var:
                 continue
 
-            if var.startswith("mhs"):
+            elif key == var:
+                title = template
+                break
+
+            elif var.startswith("mhs"):
                 category = var.split("_")[1]
-                fill = "" if category == "all" else f"{category.title()}"
+                fill = (
+                    mhs_name
+                    if category == "all"
+                    else f"{category.title()} {mhs_name}"
+                )
                 if any(tag in var for tag in ("acled", "ucdp")):
-                    return template.format(
-                        asset_name, f"{fill} {mhs_name} {conflict_name}"
-                    )
+                    fill += f"-{conflict_name}"
 
                 if legend:
-                    template.format(f"{fill}{mhs_name}", asset_name)
-                return template.format(asset_name, f"{fill}{mhs_name}")
+                    title = template.format(fill, asset_name)
+                else:
+                    title = template.format(asset_name, fill)
 
-            title = var
-            if "exposure" in var and asset:
-                title = title.replace(f"_{asset}", "").replace(asset, "")
-            if "acled" in var or "ucdp" in var:
-                title = template.format(asset_name, conflict_name)
+                title = smart_capitalize(title)
+                break
+
+            elif key in var:
+                title = var
+                if "exposure" in var and asset:
+                    title = title.replace(f"_{asset}", "").replace(asset, "")
+                if "acled" in var or "ucdp" in var:
+                    title = template.format(asset_name, conflict_name)
+                else:
+                    title = title.replace(f"_{key}", "").replace("_", " ")
+                    title = template.format(asset_name, title)
+
+                title = smart_capitalize(title)
+                break
+
+        if title is None:
+            if "_" in var or "type" in var:
+                title = smart_capitalize(var.replace("_", " ").title())
             else:
-                title = title.replace(f"_{key}", "").replace("_", " ")
-                title = template.format(asset_name, title)
+                title = smart_capitalize(f"{var} Risk")
 
-            title = smart_capitalize(title)
+        if legend and "bem" in var and "relative" not in var:
+            title += "\n(Total US Dollar)"
 
-            if legend and "bem" in var and "relative" not in var:
-                title += "\n(Total US Dollars)"
-
-            return title
-
-        if "_" in var or "type" in var:
-            title = smart_capitalize(var.replace("_", " ").title())
-        else:
-            title = smart_capitalize(f"{var} Risk")
-
-        if legend and "bem" in var:
-            title += "\nTotal US Dollar"
+        if legend and "worldcover" in var and "relative" not in var:
+            title += " (km$^2$)"
 
         return title
 

@@ -12,7 +12,8 @@ import importlib_resources
 from functools import reduce
 
 import datetime
-from tqdm import tqdm
+from pathlib import Path
+from tqdm.auto import tqdm
 from dateutil.relativedelta import relativedelta
 
 import pandas as pd
@@ -563,6 +564,10 @@ class DatasetManager:
                     colname = f"{column}_relative"
                     if "exposure" in column and colname not in data.columns:
                         data[colname] = data[column] / data[asset]
+
+        for column in data.columns:
+            if "worldcover" in column and "relative" not in column:
+                data[column] = data[column] * 0.01
 
         # Loop through each suffix to calculate MHS
         for suffix in suffixes:
@@ -1644,7 +1649,6 @@ class DatasetManager:
                             url, dataset, out_file=global_file, ext=ext
                         )
                     elif url.endswith(".tif"):
-                        # urllib.request.urlretrieve(url, global_file)
                         self._download_url_progress(url, global_file)
                 except Exception as e:
                     raise RuntimeError(
@@ -1821,6 +1825,125 @@ class DatasetManager:
 
         return local_file
 
+    def download_worldcover(
+        self,
+        land_cover_class: str,
+        name: str = "worldcover",
+        year: int = 2021,
+        overwrite: bool = False,
+    ):
+        admin = self.geoboundary.dissolve(by="iso_code").to_crs(self.crs)
+
+        # Load worldcover grid
+        worldcover_url = self.config["urls"][f"{name}_url"]
+        url = f"{worldcover_url}/esa_worldcover_grid.geojson"
+        grid = gpd.read_file(url).to_crs(self.crs)
+
+        # Get grid tiles intersecting AOI
+        tiles = gpd.overlay(grid, admin, how="intersection")
+
+        # Map Code source: https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/docs/WorldCover_PUM_V2.0.pdf
+        map_code = {
+            "tree_cover": 10,
+            "shrubland": 20,
+            "grassland": 30,
+            "cropland": 40,
+            "builtup": 50,
+            "bare_sparse_vegetation": 60,
+            "snow_and_ice": 70,
+            "permanent_water_bodies": 80,
+            "herbaceous_wetland": 90,
+            "mangroves": 95,
+            "moss_and_lichen": 100,
+        }
+
+        # Select version tag, based on the year
+        version = {2020: "v100", 2021: "v200"}[year]
+
+        local_file = self._build_filename(
+            self.iso_code,
+            f"{name.upper()}_{land_cover_class.upper()}",
+            self.local_dir,
+            ext="tif",
+        )
+
+        if not os.path.exists(local_file):
+            worldcover_file = self._build_filename(
+                self.iso_code,
+                name.upper(),
+                self.local_dir,
+                ext="tif",
+            )
+
+            if not os.path.exists(worldcover_file):
+                out_dir = os.path.join(self.local_dir, name)
+                os.makedirs(out_dir, exist_ok=True)
+
+                # Download TIF files
+                for tile in tqdm(tiles.ll_tile):
+                    raw_name = (
+                        f"ESA_WorldCover_10m_{year}_{version}_{tile}_Map.tif"
+                    )
+                    filename = os.path.join(out_dir, raw_name)
+                    if not os.path.exists(worldcover_file):
+                        url = (
+                            f"{worldcover_url}/{version}/{year}/map/{raw_name}"
+                        )
+                        r = requests.get(url, allow_redirects=True)
+                        with open(filename, "wb") as f:
+                            f.write(r.content)
+
+                logging.info(
+                    f"Generating worldcover map for {self.country}. Hang tight, this might take a while..."
+                )
+                vrt_file = os.path.join(
+                    self.local_dir, f"{self.iso_code}_{name.upper()}.vrt"
+                )
+                temp_file = os.path.join(
+                    self.local_dir, f"{self.iso_code}_{name.upper()}_TEMP.tif"
+                )
+                self._merge_tifs(f"{out_dir}/*.tif", vrt_file, temp_file)
+
+                resampled_file = os.path.join(
+                    self.local_dir,
+                    f"{self.iso_code}_{name.upper()}_RESAMPLED.tif",
+                )
+                worldpop_file = self.download_url("worldpop", ext="tif")
+                resampled_file = self._resample_raster(
+                    worldpop_file, temp_file, resampled_file
+                )
+
+                admin = self.geoboundary.dissolve(by="iso_code")
+                self._clip_raster(resampled_file, worldcover_file, admin)
+
+            code = map_code[land_cover_class]
+            local_file = self._mask_raster_by_code(
+                worldcover_file, local_file, code
+            )
+
+        return local_file
+
+    def _mask_raster_by_code(self, raster_file: str, out_file: str, code: int):
+        # Ensure both hazard and asset rasters exist
+        if not os.path.exists(raster_file):
+            raise FileNotFoundError(f"Raster file not found: {raster_file}")
+
+        # Open both asset and hazard rasters
+        with rio.open(raster_file, "r") as src:
+            # Asset raster values
+            raster = src.read(1)
+            raster[raster != code] = 0
+            raster[raster == code] = 1
+
+            out_meta = src.meta.copy()
+            out_meta.update(count=1, dtype="int16")
+
+        # Save exposure raster
+        with rio.open(out_file, "w", **out_meta) as dst:
+            dst.write(raster.astype(out_meta["dtype"]), 1)
+
+        return out_file
+
     def download_fathom(self) -> gpd.GeoDataFrame | None:
         """Download, process, and aggregate Fathom flood data for the given country.
 
@@ -1990,6 +2113,11 @@ class DatasetManager:
                     local_file = self.download_jrc(dataset)
                 elif ("flood" in dataset) and (self.fathom is not None):
                     continue
+                elif "worldcover" in dataset:
+                    land_cover_class = dataset.split("_")[-1]
+                    local_file = self.download_worldcover(
+                        land_cover_class=land_cover_class
+                    )
                 else:
                     local_file = self.download_url(dataset, ext="tif")
 
@@ -2258,7 +2386,7 @@ class DatasetManager:
             weighted_exposure = exposure * hazard_scaled
 
             # Copy metadata from asset raster to preserve georeferencing
-            out_meta = src1.meta.copy()
+            out_meta = src2.meta.copy()
 
         # Save binary exposure raster
         binary_file = exposure_file.replace("EXPOSURE", "BINARY")
@@ -2395,13 +2523,20 @@ class DatasetManager:
                 out_image, out_transform = rio.mask.mask(
                     src, shape, crop=True, all_touched=True
                 )
+
+                out_meta = src.meta.copy()
+                dtype = out_meta["dtype"]
+                if dtype == "uint8":
+                    dtype = "int16"
+                    out_image = out_image.astype(dtype)
                 for val in nodata:
                     out_image[out_image == val] = -1
 
                 # Update raster metadata to reflect changes
-                out_meta = src.meta.copy()
+
                 out_meta.update(
                     {
+                        "dtype": dtype,
                         "driver": "GTiff",
                         "height": out_image.shape[1],
                         "width": out_image.shape[2],

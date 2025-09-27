@@ -25,6 +25,8 @@ hazards:
 
 assets:
     - 'worldpop'
+    - 'worldcover_builtup'
+    - 'worldcover_cropland'
     - 'bem'
     
 threshold:
@@ -47,6 +49,8 @@ nodata:
 
 asset_data:
     - 'worldpop'
+    - 'worldcover_builtup'
+    - 'worldcover_cropland'
     - 'global_bem'
 
 hazard_data: 
@@ -69,6 +73,8 @@ urls:
     gbopen_url: "https://www.geoboundaries.org/api/current/gbOpen/"
     # Source: https://hub.worldpop.org/geodata/listing?id=69
     worldpop_url: "https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/{}/{}_ppp_2020_UNadj.tif"
+    # Source: https://esa-worldcover.org/en/data-access
+    worldcover_url: "https://esa-worldcover.s3.eu-central-1.amazonaws.com"
     # Source: https://giri.unepgrid.ch/map?view=MX-B7WR7-ZLQO2-J5OMQ&list=explore
     global_bem_url: "https://hazards-data.unepgrid.ch/bem_5x5_valfis.tif"
     # Source: https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC

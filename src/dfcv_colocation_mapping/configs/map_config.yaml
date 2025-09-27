@@ -34,7 +34,7 @@ choropleth:
     barplot_label_color: "dimgray"
     barplot_label_size: 5
     
-    missing_color: "gainsboro"
+    missing_color: "silver"
     missing_edgecolor: "dimgray"
     missing_linewidth: 0.2
     missing_hatch: "////////"
@@ -74,7 +74,7 @@ bivariate_choropleth:
     annotation_color: "#909090"
     legend_fontsize: 5
     
-    missing_color: "gainsboro"
+    missing_color: "silver"
     missing_edgecolor: "dimgray"
     missing_linewidth: 0.2
     missing_hatch: "////////"
@@ -231,20 +231,27 @@ folium:
         weight: 0.1
 
 
+asset_alias:
+    worldcover_builtup: "Built-up Area"
+    bem: "Building Value"
+    worldpop: "Population"
+
+
 legend_titles:
     numPresentIdpInd: "Number of IDPs"
     osm_category: "OSM Category"
     conflict_count: "Number of conflict events"
     fatalities_per_conflict: "Number of fatalities per conflict"
     fatalities: "Number of fatalities"
-    intensity_weighted_exposure_relative: "Intensity-weighted Relative \n{} Exposure Index"
-    intensity_weighted_exposure: "Intensity-weighted \n{} Exposure Index"
-    mhs: "{} \n{} Exposure Index"
+    intensity_weighted_exposure_relative: "Intensity-weighted Relative \n{} Exposure Score"
+    intensity_weighted_exposure: "Intensity-weighted \n{} Exposure Score"
+    mhs: "{} \n{} Exposure Score"
     exposure_relative: "Proportion of {} \n exposed to {} (%)"
     exposure: "{} exposed \nto {}"
     earthquake: "Peak Ground \nAcceleration (PGA)"
     cyclone: "Windspeed"
-    bem: "Building Valuation \n(Total US Dollars)"
+    worldcover_builtup: "Built-up Area"
+    bem: "Building Valuation"
     worldpop: "Population"
 
 
@@ -256,23 +263,21 @@ var_titles:
     intensity_weighted_exposure_relative: "Intensity-weighted Relative {} Exposure to {}"
     exposure_relative: "Relative {} Exposure to {}"
     exposure: "Absolute {} Exposure to {}"
+    worldcover_builtup: "Built-up Area"
     bem: "Building Valuation"
     worldpop: "Population"
 
     
 annotations:
+    worldcover: "ESA WorldCover 10 m 2021 v200 (Zanaga, et al., 2022)"
+    bem: "The GIRI Global Building Exposure Model (BEM) (Pillar et al., 2023)"
     geoboundary: "Administrative boundaries from geoBoundaries (Runfola, D. et al., 2020)"
     gadm: "Administrative boundaries from GADM v4.1"
     mimu: "Administrative boundaries from Myanmar Information Management Unit (MIMU) v9.4"
-    mhs: "Multi-hazard Score, The World Bank Group, 2025"
+    mhs: "Multihazard Score, The World Bank Group, 2025"
     earthquake: "Global Earthquake Model (GEM) Seismic Hazard Map (version 2023.1 - June 2023)"
-    drought: "SPEI Drought Indices from Drought.gov and CSIC (Vicente-Serrano et al., 2010)"
+    drought: "SPEI Drought Indices from Drought.gov and CSIC (Vicente-Serrano, et al., 2010)"
     landslide: "Global Landslide Hazard Map, The World Bank (2021)"
     worldpop: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
-    exposure: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
     acled: "Conflict data from Armed Conflict Location & Event Data Project (ACLED)"
     ucdp: "Conflict data from UCDP (Sundberg, Ralph, and Erik Melander, 2013)"
-
-asset_alias:
-    bem: "Building Value"
-    worldpop: "Population"
