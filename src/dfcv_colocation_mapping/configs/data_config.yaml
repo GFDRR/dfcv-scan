@@ -1,45 +1,37 @@
-hazards:
-    # https://pmc.ncbi.nlm.nih.gov/articles/PMC7123175/
-    hydromet:
-        fluvial_flood: 1
-        fluvial_defended: 1
-        pluvial_defended: 1
-        coastal_defended: 1
-        drought: 1
-        cyclone: 1
-        heat_stress: 1
+# Hazard classification:
+# https://doc.emdat.be/docs/data-structure-and-content/glossary/
+# https://pmc.ncbi.nlm.nih.gov/articles/PMC7123175/
+hazards: 
     hydrological:
         fluvial_flood: 1
+        landslide_precip: 1
         fluvial_defended: 1
         pluvial_defended: 1
         coastal_defended: 1
-        drought: 1
     meteorological:
         cyclone: 1
         heat_stress: 1
+        lightning: 1
     geophysical:
-        landslide: 1
+        landslide_earthquake: 1
         earthquake: 1
-    biophysical:
+    climatological:
+        drought: 1
         wildfire: 1
-
-assets:
-    - 'worldpop'
-    - 'worldcover_builtup'
-    - 'worldcover_cropland'
-    - 'bem'
     
 threshold:
     global_earthquake: 0.18 # https://dc.engconfintl.org/cgi/viewcontent.cgi?article=1015&context=geohazards
-    global_landslide: 3
-    global_cyclone: 80
-    global_drought: -1 
+    global_landslide_earthquake: 0.001 # https://datacatalog.worldbank.org/search/dataset/0037584
+    global_landslide_precip: 0.001  # https://datacatalog.worldbank.org/search/dataset/0037584
+    global_cyclone: 119 # https://www.noaa.gov/jetstream/tropical/tropical-cyclone-introduction/tropical-cyclone-classification
+    global_drought: -1 # https://essd.copernicus.org/articles/13/331/2021/
     global_wildfire: 11.2 # https://gwis.jrc.ec.europa.eu/about-gwis/technical-background/fire-danger-forecast
+    global_lightning: 1.5 # https://gwis.jrc.ec.europa.eu/apps/gwis_current_situation/index.html
     global_heat_stress: 32 # https://www.weather.gov/ffc/hichart
-    global_fluvial_flood: 0.50
-    coastal_defended: 50
-    pluvial_defended: 50
-    fluvial_defended: 50
+    global_fluvial_flood: 30 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
+    coastal_defended: 30 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
+    pluvial_defended: 30 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
+    fluvial_defended: 30 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
 
 nodata: 
     global_landslide: [0, 255]
@@ -55,7 +47,8 @@ asset_data:
 
 hazard_data: 
     - 'global_earthquake'
-    - 'global_landslide'
+    - 'global_landslide_earthquake'
+    - 'global_landslide_precip'
     - 'global_cyclone'
     - 'global_drought'
     - 'global_heat_stress'
@@ -74,29 +67,43 @@ urls:
     # Source: https://hub.worldpop.org/geodata/listing?id=69
     worldpop_url: "https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/{}/{}_ppp_2020_UNadj.tif"
     # Source: https://esa-worldcover.org/en/data-access
+    # https://landcarbonlab.org/insights/global-land-cover-maps-accuracy-applications/
     worldcover_url: "https://esa-worldcover.s3.eu-central-1.amazonaws.com"
+    # Source: https://helix-tools-api.idmcdb.org/external-api/?#/GIDD/gidd_disaggregations_disaggregation_geojson_retrieve
+    idmc_gidd_url: "https://helix-tools-api.idmcdb.org/external-api/gidd/disaggregations/disaggregation-geojson/?client_id={}&release_environment=RELEASE&iso3__in={}&cause={}"
+    # Source: https://dataforgood.facebook.com/dfg/tools/relative-wealth-index
+    global_rwi_url: "https://undpngddlsgeohubdev01.blob.core.windows.net/end-poverty/Relative_Wealth_Index.tif?sv=2025-07-05&ss=b&srt=o&se=2026-09-27T23%3A53%3A45Z&sp=r&sig=%2BwLcTgzvURRuAWgyqATIYyVFdUzVCQnoTA0ULDuPwYY%3D"
     # Source: https://giri.unepgrid.ch/map?view=MX-B7WR7-ZLQO2-J5OMQ&list=explore
     global_bem_url: "https://hazards-data.unepgrid.ch/bem_5x5_valfis.tif"
     # Source: https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC
     global_ghsl_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_S_GLOBE_R2023A/GHS_BUILT_S_E2030_GLOBE_R2023A_54009_100/V1-0/GHS_BUILT_S_E2030_GLOBE_R2023A_54009_100_V1_0.zip"
     # Source: https://ucdp.uu.se/encyclopedia
     global_ucdp_url: "https://ucdp.uu.se/downloads/ged/ged251-csv.zip"
+    # Source: https://giri.unepgrid.ch/map?list=explore&view=MX-A9CT6-A1M7X-4VY3L
+    #global_landslide_precip_url: "https://hazards-data.unepgrid.ch/n2_mosaic_wgs84_opt.tif"
+    #global_landslide_earthquake_url: "https://hazards-data.unepgrid.ch/n1_mosaic_wgs84_opt.tif"
     # Source: https://datacatalog.worldbank.org/search/dataset/0037584
-    global_landslide_url: "https://datacatalogfiles.worldbank.org/ddh-published/0037584/DR0045417/LS_TH_COG.tif"
+    global_landslide_precip_url: "https://datacatalogfiles.worldbank.org/ddh-published/0037584/1/DR0045418/LS_RF_Mean_1980-2018_COG.tif"
+    global_landslide_earthquake_url: "https://datacatalogfiles.worldbank.org/ddh-published/0037584/1/DR0045416/ls_eq_tiled.tif"
     # Source: https://zenodo.org/records/8409647
     global_earthquake_url: "https://zenodo.org/records/8409647/files/GEM-GSHM_PGA-475y-rock_v2023.zip"
     # Source: https://data.humdata.org/dataset/cyclone-wind-100-years-return-period
-    global_cyclone_url: "https://data.humdata.org/dataset/6366ac1f-6bed-42e9-b96e-22ef81008931/resource/202221dd-a79d-4ce5-93d7-f34f7514aeb2/download/viento-mundo-tr100-int1-g152.zip" 
+    global_cyclone_hdx_url: "https://data.humdata.org/dataset/6366ac1f-6bed-42e9-b96e-22ef81008931/resource/202221dd-a79d-4ce5-93d7-f34f7514aeb2/download/viento-mundo-tr100-int1-g152.zip" 
+    # Source: https://giri.unepgrid.ch/map?view=MX-HQYK4-ZSD45-28FOH
+    global_cyclone_url: "https://hazards-data.unepgrid.ch/Wind_T250.tif"
     # Source: https://www.drought.gov/data-download
     global_drought_url: "https://storage.googleapis.com/noaa-nidis-drought-gov-data/current-conditions/tile/v1/ce-GLOBAL-ERA5_LAND_DAILY-speih-6mo/GLOBAL-ERA5_LAND_DAILY-speih-6mo.tif"
     # Source: https://zenodo.org/records/8310513
     global_heat_stress_url: "https://zenodo.org/records/8310513/files/GloUTCI-M_YEAR_2022_MONTH_10.zip"
+    # Source: https://giri.unepgrid.ch/map?view=MX-6FLW2-W3L51-SNGTU
+    global_fluvial_flood_url: "https://hazards-data.unepgrid.ch/global_pc_h10glob.tif"
     # Source: https://data.jrc.ec.europa.eu/dataset/jrc-floods-floodmapgl_rp100y-tif
     global_fluvial_flood_v1_url: "https://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/FLOODS/GlobalMaps/floodMapGL_rp100y.zip"
     # Source: https://data.jrc.ec.europa.eu/dataset/jrc-floods-floodmapgl_rp50y-tif
     global_fluvial_flood_v2_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/RP{}/"
     # Source: https://gwis.jrc.ec.europa.eu/applications/data-and-services
-    global_wildfire_url: "https://maps.effis.emergency.copernicus.eu/gwis?LAYERS=nasa_geos5.fwi&FORMAT=image/tiff&TRANSPARENT=true&SINGLETILE=false&SERVICE=wms&VERSION=1.1.1&REQUEST=GetMap&STYLES=&SRS=EPSG:4326&BBOX=-180.15625,-58.125,179.84375,75.125&WIDTH=1152&HEIGHT=533&TIME=2025-09-09.tif"
+    global_wildfire_url: "https://maps.effis.emergency.copernicus.eu/gwis?LAYERS=ecmwf.fwi&FORMAT=image/tiff&TRANSPARENT=true&SINGLETILE=false&SERVICE=wms&VERSION=1.1.1&REQUEST=GetMap&STYLES=&SRS=EPSG:4326&BBOX=-180.0,-90.0,180.0,90.0&WIDTH=5120&HEIGHT=2560&TIME={}.tiff"
+    global_lightning_url: "https://maps.effis.emergency.copernicus.eu/gwis?LAYERS=ecmwf.extra.lightning&FORMAT=image/tiff&TRANSPARENT=true&SINGLETILE=false&SERVICE=wms&VERSION=1.1.1&REQUEST=GetMap&STYLES=&SRS=EPSG:4326&BBOX=-180.0,-90.0,180.0,90.0&WIDTH=5120&HEIGHT=2560&TIME={}.tif"
 
 acled_hierarchy:
     "Political_violence":

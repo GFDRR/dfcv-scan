@@ -18,7 +18,7 @@ choropleth:
     
     legend_title_x: -5.05
     legend_title_y: 1.05
-    legend_type: 'colorbar'
+    legend_type: 'default'
     
     legend_shrink: 0.25
     legend_title_gap: 1.025
@@ -37,7 +37,7 @@ choropleth:
     missing_color: "silver"
     missing_edgecolor: "dimgray"
     missing_linewidth: 0.2
-    missing_hatch: "////////"
+    missing_hatch: "///"
     missing_label: "No data"
     missing_legend_fontsize: "small"
     missing_legend_loc: "lower right"
@@ -77,7 +77,7 @@ bivariate_choropleth:
     missing_color: "silver"
     missing_edgecolor: "dimgray"
     missing_linewidth: 0.2
-    missing_hatch: "////////"
+    missing_hatch: "///"
     missing_label: "No data"
     missing_legend_fontsize: "small"
     missing_legend_loc: "lower right"
@@ -204,6 +204,7 @@ points:
     alpha: 0.6
 
     markerscale: 1
+    markersize: 25
     labelspacing: 1.5
     cmap: "Dark2"
 
@@ -233,12 +234,18 @@ folium:
 
 asset_alias:
     worldcover_builtup: "Built-up Area"
+    worldcover_cropland: "Cropland Area"
     bem: "Building Value"
     worldpop: "Population"
 
+hazard_alias:
+    landslide_earthquake: "Earthquake-triggered Landslide"
+    landslide_precip: "Precipitation-triggered Landslide"
 
 legend_titles:
-    numPresentIdpInd: "Number of IDPs"
+    disaster_idp_total: "Number of IDPs \nfrom Disasters"
+    conflict_idp_total: "Number of IDPs \nfrom Conflicts"
+    idp_total: "Number of IDPs"
     osm_category: "OSM Category"
     conflict_count: "Number of conflict events"
     fatalities_per_conflict: "Number of fatalities per conflict"
@@ -246,17 +253,22 @@ legend_titles:
     intensity_weighted_exposure_relative: "Intensity-weighted Relative \n{} Exposure Score"
     intensity_weighted_exposure: "Intensity-weighted \n{} Exposure Score"
     mhs: "{} \n{} Exposure Score"
-    exposure_relative: "Proportion of {} \n exposed to {} (%)"
+    exposure_relative: "Proportion of {}  \nexposed to {} (%)"
     exposure: "{} exposed \nto {}"
+    landslide_earthquake: "Susceptibility to \nEarthquake-triggered Landslide"
+    landslide_precip: "Mean Average Annual Frequency \nof Precipitation-triggered Landslide"
     earthquake: "Peak Ground \nAcceleration (PGA)"
     cyclone: "Windspeed"
     worldcover_builtup: "Built-up Area"
+    worldcover_cropland: "Crop Land Area"
     bem: "Building Valuation"
     worldpop: "Population"
 
 
 var_titles:
-    numPresentIdpInd: "Number of IDPs"
+    disaster_idp_total: "Number of IDPs from Disasters"
+    conflict_idp_total: "Number of IDPs from Conflicts"
+    idp_total: "Number of IDPs"
     conflict_count: "Number of Conflict Events"
     fatalities_per_conflict: "Fatalities per Conflict"
     fatalities: "Number of Fatalities"
@@ -264,20 +276,27 @@ var_titles:
     exposure_relative: "Relative {} Exposure to {}"
     exposure: "Absolute {} Exposure to {}"
     worldcover_builtup: "Built-up Area"
+    worldcover_cropland: "Crop Land Area"
     bem: "Building Valuation"
     worldpop: "Population"
 
     
 annotations:
+    idmc: "IDP Data from Internal Displacement Monitoring Centre (IDMC)"
+    dtm: "IDP Data from IOM DTM"
     worldcover: "ESA WorldCover 10 m 2021 v200 (Zanaga, et al., 2022)"
     bem: "The GIRI Global Building Exposure Model (BEM) (Pillar et al., 2023)"
     geoboundary: "Administrative boundaries from geoBoundaries (Runfola, D. et al., 2020)"
     gadm: "Administrative boundaries from GADM v4.1"
     mimu: "Administrative boundaries from Myanmar Information Management Unit (MIMU) v9.4"
     mhs: "Multihazard Score, The World Bank Group, 2025"
+    cyclone: "Global Tropical Cyclone Wind RP 250 from Coalition for Disaster Resilient Infrastructure (CDRI)"
+    landslide: "Global Landslide Hazard Map, The World Bank (2021)"
     earthquake: "Global Earthquake Model (GEM) Seismic Hazard Map (version 2023.1 - June 2023)"
     drought: "SPEI Drought Indices from Drought.gov and CSIC (Vicente-Serrano, et al., 2010)"
-    landslide: "Global Landslide Hazard Map, The World Bank (2021)"
+    fluvial_flood: "Global Flood Hazard Continuum model (Silvestro et al. 2013 and 2015)"
+    heat_stress: "GloUTCI-M: A Global Monthly 1 km Universal Thermal Climate Index Dataset (2022) (Yang et al., 2023)"
+    wildfire: "Fire Weather Index (FWI) (Di Giuseppe, et al., 2023)"
     worldpop: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
     acled: "Conflict data from Armed Conflict Location & Event Data Project (ACLED)"
     ucdp: "Conflict data from UCDP (Sundberg, Ralph, and Erik Melander, 2013)"

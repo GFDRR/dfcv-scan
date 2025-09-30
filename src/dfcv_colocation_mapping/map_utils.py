@@ -335,7 +335,11 @@ class GeoPlot:
         )
 
         cbar = fig.colorbar(
-            img, cax=axins, orientation="vertical", pad=config["cbar_pad"]
+            img,
+            cax=axins,
+            orientation="vertical",
+            format=mticker.FuncFormatter(data_utils._humanize),
+            pad=config["cbar_pad"],
         )
         cbar.ax.set_yticklabels(
             cbar.ax.get_yticklabels(), fontsize=config["cbar_fontsize"]
@@ -452,7 +456,7 @@ class GeoPlot:
                 cmap=cmap,
                 column=column,
                 legend=False,
-                markersize=8,
+                markersize=config["markersize"],
                 alpha=config["alpha"],
                 lw=0,
             )
@@ -1256,6 +1260,8 @@ class GeoPlot:
         legend_title: str = None,
         annotation: str = None,
         var_bounds: list = [None, None],
+        nbins: int = 6,
+        binning: str = "equal_intervals",
         zoom_to: dict = None,
         kwargs: dict = None,
         key="choropleth",
@@ -1362,6 +1368,7 @@ class GeoPlot:
             vmin = data[var].min()
         if vmax is None:
             vmax = data[var].max()
+        var_bounds = [vmin, vmax]
 
         fig.canvas.draw()
         xpos = None
@@ -1416,49 +1423,68 @@ class GeoPlot:
             iax.set_axis_off()
 
         elif config["legend_type"] == "default":
-            # Transform value and get color
-            unique_value = data[var].dropna().unique()[0]
-            cmap_value = (
-                unique_value / 100 if "relative" in var else unique_value
-            )
-            color = cmap(cmap_value) if 0 <= cmap_value <= 1 else cmap(0.5)
+            # Apply binning method for both variables
 
-            # Plot single-color map
+            if binning == "quantiles":
+                var_categories, var_bins = pd.qcut(
+                    data[var], nbins, labels=range(nbins), retbins=True
+                )
+            elif binning == "equal_intervals":
+                var_categories, var_bins = self._cut(
+                    data[var], var_bounds, nbins
+                )
+
+            # Determine colors for bins
+            cmap = plt.get_cmap(config["cmap"])
+            colors = [cmap(i / (nbins - 1)) for i in range(nbins)]
+
+            # Create human-readable labels for bins
+            labels = [
+                f"{data_utils._humanize(round(var_bins[i], 2))} – {data_utils._humanize(round(var_bins[i+1], 2))}"
+                for i in range(nbins)
+            ]
+
+            # Plot choropleth using the colors
+            color_mapping = {str(i): c for i, c in enumerate(colors)}
+
+            missing_color = "white"
+            color_mapping["nan"] = missing_color
+            data["bins"] = var_categories
+            data["bins"] = data["bins"].astype(str)
+            data["color"] = data["bins"].map(color_mapping)
+            data["color"] = data["color"].fillna(missing_color)
+
             data.plot(
                 ax=ax,
-                color=color,
+                color=data["color"],
                 edgecolor=config["edgecolor"],
                 linewidth=config["linewidth"],
             )
-
-            # Add legend showing value
-            label_text = data_utils._humanize(unique_value)
-
-            # Create a single-color legend patch
-            legend_patch = mpatches.Patch(
-                facecolor=color,
-                edgecolor=config["edgecolor"],
-                label=label_text,
-            )
-
-            # Add legend with title on the LEFT
+            # Manually create legend
+            patches = [
+                mpatches.Patch(
+                    facecolor=c, edgecolor=config["edgecolor"], label=l
+                )
+                for c, l in zip(reversed(colors), reversed(labels))
+            ]
             legend = ax.legend(
-                handles=[legend_patch],
-                frameon=False,
-                fontsize=config["legend_label_fontsize"],
+                handles=patches,
                 loc="center left",
-                bbox_to_anchor=(-0.1, 0.5),
-                title=legend_title if legend_title else var,
+                bbox_to_anchor=(-0.3, 0.5),
+                title=legend_title,
+                fontsize=config["legend_label_fontsize"],
                 title_fontsize=config["legend_title_fontsize"],
             )
-
             ax.add_artist(legend)
 
-            # Determine left position of legend for alignment
             fig.canvas.draw()
             tight_bbox = legend.get_window_extent(fig.canvas.get_renderer())
             tight_bbox_fig = tight_bbox.transformed(fig.transFigure.inverted())
-            xpos = tight_bbox_fig.x0
+            xpos = tight_bbox_fig.x0  # left edge for alignment
+
+            # 3. Create a dummy iax somewhere else (will not hide legend)
+            iax = ax.inset_axes([0, 0, 0.01, 0.01])
+            iax.set_axis_off()
 
         elif config["legend_type"] == "colorbar":
             # Plot using a continuous colorbar legend
@@ -1718,19 +1744,7 @@ class GeoPlot:
 
         Returns:
             matplotlib.axes.Axes: Axis with missing data plotted and legend added.
-
-        Raises:
-            TypeError: If `data_missing` is not a GeoDataFrame.
-            ValueError: If `data_missing` is empty.
         """
-
-        if not isinstance(data_missing, gpd.GeoDataFrame):
-            raise TypeError("`data_missing` must be a GeoDataFrame.")
-        if data_missing.empty:
-            raise ValueError(
-                "`data_missing` GeoDataFrame is empty — cannot plot missing data."
-            )
-
         # Set hatch linewidth globally (applies to all hatching in the plot)
         mpl.rcParams["hatch.linewidth"] = config["missing_hatch_linewidth"]
 
@@ -1806,27 +1820,7 @@ class GeoPlot:
 
         Returns:
             None: The function modifies the given `fig` by adding a tiny inset map.
-
-        Raises:
-            ValueError: If `data` or `dissolved` is empty.
-            KeyError: If `data` does not contain an 'iso_code' column.
-            TypeError: If `x` is not numeric.
         """
-
-        # Validation checks
-        if data.empty:
-            raise ValueError(
-                "`data` GeoDataFrame is empty — cannot plot tiny map."
-            )
-        if dissolved.empty:
-            raise ValueError(
-                "`dissolved` GeoDataFrame is empty — cannot plot tiny map."
-            )
-        if "iso_code" not in data.columns:
-            raise KeyError("`data` must contain an 'iso_code' column.")
-        if not isinstance(x, (int, float)):
-            raise TypeError("`x` must be a numeric value.")
-
         # Get main axes and legend axes positions (in figure coordinates)
         ax1_pos = ax1.get_position()
         ax2_pos = ax2.get_position()
@@ -1921,7 +1915,23 @@ class GeoPlot:
         title_y = config.get("title_y", y1)
 
         if subtitle is None:
-            if "conflict" in title.lower():
+            if "idmc" in annotation.lower():
+                start_date = datetime.strptime(
+                    self.dm.displacement_start_date, "%Y-%m-%d"
+                )
+                end_date = datetime.strptime(
+                    self.dm.displacement_end_date, "%Y-%m-%d"
+                )
+                subtitle = f"Displacement events from {start_date.year} to {end_date.year}"
+
+            elif "dtm" in annotation.lower():
+                year = self.dm.dtm_filtered.yearReportingDate.unique()[0]
+                round_number = self.dm.dtm_filtered.roundNumber.unique()[0]
+                subtitle = (
+                    f"Displacement events in {year} (Round {round_number})"
+                )
+
+            elif "conflict" in annotation.lower():
                 start_date = datetime.strptime(
                     self.dm.conflict_start_date, "%Y-%m-%d"
                 )
@@ -1929,13 +1939,6 @@ class GeoPlot:
                     self.dm.conflict_end_date, "%Y-%m-%d"
                 )
                 subtitle = f"Conflict events from {start_date.year} to {end_date.year}"
-
-            if "idp" in title.lower():
-                start_date = datetime.strptime(
-                    self.dm.dtm_start_date, "%Y-%m-%d"
-                )
-                end_date = datetime.strptime(self.dm.dtm_end_date, "%Y-%m-%d")
-                subtitle = f"Displacement events from {start_date.year} to {end_date.year}"
 
         # Add subtitle (if provided)
         if subtitle is not None:
@@ -2025,25 +2028,14 @@ class GeoPlot:
                 "a",
                 "an",
                 "and",
-                "as",
-                "at",
-                "but",
-                "by",
-                "for",
-                "from",
                 "in",
-                "nor",
                 "of",
                 "on",
-                "or",
-                "so",
                 "the",
                 "to",
-                "up",
-                "yet",
                 "is",
+                "from",
             }
-
             tokens = re.split(r"(\s+)", s)
             words = [t for t in tokens if t.strip() and not t.isspace()]
 
@@ -2057,12 +2049,12 @@ class GeoPlot:
 
             wi = 0
             out = []
-            for t in tokens:
-                if t.strip() and not t.isspace():
-                    out.append(cap_word(t, wi))
+            for token in tokens:
+                if token.strip() and not token.isspace():
+                    out.append(cap_word(token, wi))
                     wi += 1
                 else:
-                    out.append(t)
+                    out.append(token)
             return "".join(out)
 
         if config_key not in self.map_config:
@@ -2075,6 +2067,15 @@ class GeoPlot:
             asset_name = self.map_config["asset_alias"][asset]
 
         title = None
+        for alias in self.map_config["hazard_alias"]:
+            if alias in var:
+                title = self.map_config["hazard_alias"][alias]
+                if legend:
+                    words = title.split(" ")  # Split only at the first space
+                    title = " ".join(words[:1] + ["\n"] + words[1:])
+                    title = title.replace("\n ", "\n")
+                break
+
         for key, template in legend_titles.items():
             if key not in var:
                 continue
@@ -2102,7 +2103,8 @@ class GeoPlot:
                 break
 
             elif key in var:
-                title = var
+                if title is None:
+                    title = var
                 if "exposure" in var and asset:
                     title = title.replace(f"_{asset}", "").replace(asset, "")
                 if "acled" in var or "ucdp" in var:
@@ -2282,7 +2284,8 @@ class GeoPlot:
 
     def get_asset(self, var):
         asset = None
-        for asset_name in self.dm.config["assets"]:
+        for asset_name in self.dm.config["asset_data"]:
+            asset_name = asset_name.replace("global_", "")
             if asset_name in var:
                 return asset_name
         return asset
