@@ -845,6 +845,7 @@ class DatasetManager:
                             f"Geoboundary file saved to {os.path.basename(intermediate_file)}."
                         )
                     except Exception as e:
+                        print(e)
                         raise FileNotFoundError(
                             f"Failed to read GeoJSON file {os.path.basename(intermediate_file)}: {str(e)}"
                         )
@@ -1116,7 +1117,7 @@ class DatasetManager:
                 adm = self.download_geoboundary(
                     adm_source="geoboundary",
                     adm_level=dtm_adm_level,
-                    overwrite=True,
+                    overwrite=False,
                 )
             except Exception as e:
                 logging.info(e)
