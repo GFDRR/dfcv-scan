@@ -1183,6 +1183,7 @@ class DatasetManager:
             )
             dtm_agg = dtm_agg.rename(columns={idp_column: "dtm_idp_total"})
 
+            adm = self.geoboundary
             dtm_agg = adm.merge(
                 dtm_agg, left_on=dtm_adm_level, right_on=column, how="left"
             )
