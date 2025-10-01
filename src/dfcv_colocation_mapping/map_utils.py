@@ -1483,7 +1483,8 @@ class GeoPlot:
             xpos = tight_bbox_fig.x0  # left edge for alignment
 
             # 3. Create a dummy iax somewhere else (will not hide legend)
-            iax = ax.inset_axes([0, 0, 0.01, 0.01])
+            # iax = ax.inset_axes(tight_bbox_fig)
+            iax = fig.add_axes(tight_bbox_fig)
             iax.set_axis_off()
 
         elif config["legend_type"] == "colorbar":
