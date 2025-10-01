@@ -71,8 +71,6 @@ urls:
     worldcover_url: "https://esa-worldcover.s3.eu-central-1.amazonaws.com"
     # Source: https://helix-tools-api.idmcdb.org/external-api/?#/GIDD/gidd_disaggregations_disaggregation_geojson_retrieve
     idmc_gidd_url: "https://helix-tools-api.idmcdb.org/external-api/gidd/disaggregations/disaggregation-geojson/?client_id={}&release_environment=RELEASE&iso3__in={}&cause={}"
-    # Source: https://dataforgood.facebook.com/dfg/tools/relative-wealth-index
-    global_rwi_url: "https://undpngddlsgeohubdev01.blob.core.windows.net/end-poverty/Relative_Wealth_Index.tif?sv=2025-07-05&ss=b&srt=o&se=2026-09-27T23%3A53%3A45Z&sp=r&sig=%2BwLcTgzvURRuAWgyqATIYyVFdUzVCQnoTA0ULDuPwYY%3D"
     # Source: https://giri.unepgrid.ch/map?view=MX-B7WR7-ZLQO2-J5OMQ&list=explore
     global_bem_url: "https://hazards-data.unepgrid.ch/bem_5x5_valfis.tif"
     # Source: https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC
