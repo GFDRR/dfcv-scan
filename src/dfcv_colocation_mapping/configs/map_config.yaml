@@ -197,14 +197,14 @@ points:
     crs: "EPSG:3857"
 
     legend_y: 0.5
-    legend_title_fontsize: 5
-    legend_label_fontsize: 5
+    legend_title_fontsize: 7
+    legend_label_fontsize: 7
     edgecolor: "dimgray"
     linewidth: 0.2
     alpha: 0.6
 
     markerscale: 1
-    markersize: 25
+    markersize: 40
     labelspacing: 1.5
     cmap: "Dark2"
 
