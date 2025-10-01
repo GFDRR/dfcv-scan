@@ -13,7 +13,7 @@ from functools import reduce
 
 import datetime
 from pathlib import Path
-from tqdm.auto import tqdm
+from tqdm import tqdm
 from dateutil.relativedelta import relativedelta
 
 import pandas as pd
