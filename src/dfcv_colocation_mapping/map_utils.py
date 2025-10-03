@@ -1,6 +1,7 @@
 import re
 import os
 import math
+import copy
 import warnings
 from datetime import datetime
 import importlib_resources
@@ -17,7 +18,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.patches import Circle
 from matplotlib.legend_handler import HandlerPatch
 
-import copy
+import colormaps as cmaps
 import rasterio as rio
 import geopandas as gpd
 import geojson_rewind
@@ -804,7 +805,7 @@ class GeoPlot:
         annotation: str = None,
         group: str = "group",
         max_adms: int = 50,
-        max_groups: int = 30,
+        max_groups: int = 20,
         show_adm_names: bool = True,
         kwargs: dict = None,
         key="geoboundaries",
@@ -864,7 +865,8 @@ class GeoPlot:
 
         xpos = 0
         if group in data.columns and data[group].nunique() < max_groups:
-            cmap = ListedColormap(config["cmap"])
+            # cmap = ListedColormap(config["cmap"])
+            cmap = cmaps.tableau_20
             edgecolor = config["edgecolor_with_group"]
             linewidth = config["linewidth_with_group"]
 
