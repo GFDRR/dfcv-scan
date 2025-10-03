@@ -133,14 +133,14 @@ def _humanize(value, number=None) -> str:
             formatter = "%.1f"  # e.g., 12.3K
 
         text = humanize.intword(value, formatter)
-        text = text.replace(" thousand", "K")
+        text = text.replace(" thousand", "k")
         text = text.replace(" million", "M")
-        text = text.replace(" billion", "B")
+        text = text.replace(" billion", "G")
 
         # Remove trailing .0 for K, M, and B
-        text = text.replace(".0K", "K")
+        text = text.replace(".0k", "k")
         text = text.replace(".0M", "M")
-        text = text.replace(".0B", "B")
+        text = text.replace(".0G", "G")
 
         return text
 
