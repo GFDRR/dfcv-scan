@@ -564,6 +564,14 @@ class DatasetManager:
         # Merge all datasets on configured columns
         data = data_utils._merge_data(data, columns=self.merge_columns)
 
+        if (
+            "idmc_conflict_idp_total" in data.columns
+            and "idmc_disaster_idp_total" in data.columns
+        ):
+            data["idmc_idp_total"] = data["idmc_conflict_idp_total"].add(
+                data["idmc_disaster_idp_total"], fill_value=0
+            )
+
         return data
 
     def calculate_multihazard_score(
