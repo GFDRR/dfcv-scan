@@ -853,7 +853,6 @@ class DatasetManager:
                             f"Geoboundary file saved to {os.path.basename(intermediate_file)}."
                         )
                     except Exception as e:
-                        print(e)
                         raise FileNotFoundError(
                             f"Failed to read GeoJSON file {os.path.basename(intermediate_file)}: {str(e)}"
                         )
@@ -2604,10 +2603,7 @@ class DatasetManager:
 
             # Hazard raster values
             hazard = src2.read(1)
-            if (
-                "drought" not in hazard_file.lower()
-                and "heat_stress" not in hazard_file.lower()
-            ):
+            if "drought" not in hazard_file.lower():
                 hazard[hazard < 0] = 0
 
             if "heat_stress" in hazard_file.lower():
@@ -2632,7 +2628,9 @@ class DatasetManager:
             weighted_exposure = exposure * hazard_scaled
 
             # Copy metadata from asset raster to preserve georeferencing
-            out_meta = src2.meta.copy()
+            out_meta = src1.meta.copy()
+
+            out_meta.update({"dtype": rio.float32, "driver": "GTiff"})
 
         # Save binary exposure raster
         binary_file = exposure_file.replace("EXPOSURE", "BINARY")
@@ -2772,11 +2770,8 @@ class DatasetManager:
 
                 out_meta = src.meta.copy()
                 dtype = out_meta["dtype"]
-                if dtype == "uint8" or dtype == "uint32":
-                    dtype = "int32"
-                    out_image = out_image.astype(dtype)
                 for val in nodata:
-                    out_image[out_image == val] = -1
+                    out_image[out_image == val] = 0
 
                 # Update raster metadata to reflect changes
 
@@ -2787,7 +2782,7 @@ class DatasetManager:
                         "height": out_image.shape[1],
                         "width": out_image.shape[2],
                         "transform": out_transform,
-                        "nodata": int(-1),
+                        "nodata": 0,
                     }
                 )
 
