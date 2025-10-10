@@ -201,12 +201,11 @@ points:
     legend_label_fontsize: 7
     edgecolor: "dimgray"
     linewidth: 0.2
-    alpha: 0.6
+    alpha: 0.7
 
-    markerscale: 1
-    markersize: 40
+    markerscale: 20
     labelspacing: 1.5
-    cmap: "Dark2"
+    cmap: "tab10"
 
 
 
@@ -235,7 +234,7 @@ folium:
 asset_alias:
     worldcover_builtup: "Built-up Area"
     worldcover_cropland: "Cropland Area"
-    bem: "Building Value"
+    bem: "Building Valuation"
     worldpop: "Population"
 
 hazard_alias:
@@ -247,7 +246,7 @@ legend_titles:
     conflict_idp_total: "Number of IDPs \nfrom Conflicts"
     idp_total: "Number of IDPs"
     osm_category: "OSM Category"
-    conflict_count: "Number of conflict events"
+    conflict_count: "Number of conflict events \naffecting {}"
     fatalities_per_conflict: "Number of fatalities per conflict"
     fatalities: "Number of fatalities"
     intensity_weighted_exposure_relative: "Intensity-weighted Relative \n{} Exposure Score"
@@ -269,7 +268,7 @@ var_titles:
     disaster_idp_total: "Number of IDPs from Disasters"
     conflict_idp_total: "Number of IDPs from Conflicts"
     idp_total: "Number of IDPs"
-    conflict_count: "Number of Conflict Events"
+    conflict_count: "Number of Conflict Events Affecting {}"
     fatalities_per_conflict: "Fatalities per Conflict"
     fatalities: "Number of Fatalities"
     intensity_weighted_exposure_relative: "Intensity-weighted Relative {} Exposure to {}"
