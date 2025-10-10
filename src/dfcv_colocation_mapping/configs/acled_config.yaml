@@ -1,0 +1,129 @@
+acled_selected:
+    worldcover_cropland: 
+        "Battles":
+            - "Government regains territory"
+            - "Non-state actor overtakes territory"
+            - "Armed clash"
+        "Political violence":
+            "Explosions/Remote violence":
+                - "Chemical weapon"
+                - "Air/drone strike"
+                - "Suicide bomb"
+                - "Shelling/artillery/missile attack"
+                - "Remote explosive/landmine/IED"
+                - "Grenade"        
+                
+    worldcover_builtup: 
+        "Political violence":
+            "Battles":
+                - "Government regains territory"
+                - "Non-state actor overtakes territory"
+                - "Armed clash"
+            "Explosions/Remote violence":
+                - "Chemical weapon"
+                - "Air/drone strike"
+                - "Suicide bomb"
+                - "Shelling/artillery/missile attack"
+                - "Remote explosive/landmine/IED"
+                - "Grenade"
+            "Riots":
+                - "Mob violence"           
+        "Demonstrations":
+            "Riots":
+                - "Violent demonstration"
+        "Strategic developments":
+            "Strategic developments":
+                - "Looting/property destruction"
+                
+    bem: 
+        "Political violence":
+            "Battles":
+                - "Government regains territory"
+                - "Non-state actor overtakes territory"
+                - "Armed clash"
+            "Explosions/Remote violence":
+                - "Chemical weapon"
+                - "Air/drone strike"
+                - "Suicide bomb"
+                - "Shelling/artillery/missile attack"
+                - "Remote explosive/landmine/IED"
+                - "Grenade"
+            "Riots":
+                - "Mob violence"           
+        "Demonstrations":
+            "Riots":
+                - "Violent demonstration"
+        "Strategic developments":
+            "Strategic developments":
+                - "Looting/property destruction"
+                
+    worldpop:
+        "Political violence":
+            "Battles":
+                - "Government regains territory"
+                - "Non-state actor overtakes territory"
+                - "Armed clash"
+            "Explosions/Remote violence":
+                - "Chemical weapon"
+                - "Air/drone strike"
+                - "Suicide bomb"
+                - "Shelling/artillery/missile attack"
+                - "Remote explosive/landmine/IED"
+                - "Grenade"
+            "Riots":
+                - "Mob violence"
+            "Violence against civilians":
+                - "Sexual violence"
+                - "Attack"
+                - "Abduction/forced disappearance"
+        "Political violence; Demonstrations":
+            "Protests":
+                - "Excessive force against protesters"                
+        "Demonstrations":
+            "Protests":
+                - "Protest with intervention"
+            "Riots":
+                - "Violent demonstration"
+        "Strategic developments":
+            "Strategic developments":
+                - "Arrests"
+                - "Looting/property destruction"
+
+acled_hierarchy:
+    "Political violence":
+        "Battles":
+            - "Government regains territory"
+            - "Non-state actor overtakes territory"
+            - "Armed clash"
+        "Explosions/Remote violence":
+            - "Chemical weapon"
+            - "Air/drone strike"
+            - "Suicide bomb"
+            - "Shelling/artillery/missile attack"
+            - "Remote explosive/landmine/IED"
+            - "Grenade"
+        "Riots":
+            - "Mob violence"
+        "Violence against civilians":
+            - "Sexual violence"
+            - "Attack"
+            - "Abduction/forced disappearance"
+    "Political violence; Demonstrations":
+        "Protests":
+            - "Excessive force against protesters"                
+    "Demonstrations":
+        "Protests":
+            - "Protest with intervention"
+            - "Peaceful protest"
+        "Riots":
+            - "Violent demonstration"
+    "Strategic developments":
+        "Strategic developments":
+            - "Agreement"
+            - "Arrests"
+            - "Change to group/activity"
+            - "Disrupted weapons use"
+            - "Headquarters or base established"
+            - "Looting/property destruction"
+            - "Non-violent transfer of territory"
+            - "Other"
