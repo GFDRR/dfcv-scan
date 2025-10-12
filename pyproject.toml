@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dfcv_colocation_mapping"
-version = "0.5.9"
+version = "0.6.0"
 authors = [
   { name="Isabelle Tingzon"},
 ]
@@ -43,7 +43,8 @@ dependencies = [
     "osmnx==2.0.6",
     "dtmapi==0.1.5",
     "colormaps==0.4.2",
-    "keplergl==0.3.7"
+    "keplergl==0.3.7",
+    "ipywidgets==7.7.1"
 ]
 
 [tool.black]
