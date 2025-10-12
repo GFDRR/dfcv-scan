@@ -15,10 +15,7 @@ hazard_data:
     - 'global_wildfire'
     
 
-hazards: 
-    # Hazard classification:
-    # https://doc.emdat.be/docs/data-structure-and-content/glossary/
-    # https://pmc.ncbi.nlm.nih.gov/articles/PMC7123175/
+hazards: # https://doc.emdat.be/docs/data-structure-and-content/glossary/
     hydrological:
         fluvial_flood_cdri: 1
         fluvial_flood_jrc1: 1
@@ -31,7 +28,6 @@ hazards:
     meteorological:
         cyclone: 1
         heat_stress: 1
-        lightning: 1
     geophysical:
         landslide_earthquake_gfdrr: 1
         landslide_earthquake_cdri: 1
@@ -58,11 +54,13 @@ threshold:
     fluvial_defended_fathom: 30 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
 
 nodata: 
-    global_landslide_precip_gfdrr: [0, 255]
-    global_landslide_earthquake_gfdrr: [0, 255]
     fluvial_defended_fathom: [-32768, -32767]
     pluvial_defended_fathom: [-32768, -32767]
     coastal_defended_fathom: [-32768, -32767]
+
+country_map_code:
+    COD: "Democratic Republic of Congo"
+    COG: "Republic of Congo"
 
 worldcover_map_code:
     tree_cover: 10
