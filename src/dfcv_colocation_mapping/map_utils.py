@@ -300,7 +300,8 @@ class GeoPlot:
         with rio.open(raster_file) as src:
             out_image = src.read(1)
             plot_data = np.array(np.copy(out_image), dtype=np.float32)
-            plot_data[plot_data == src.nodata] = np.nan
+            if "drought" not in raster_name:
+                plot_data[plot_data == src.nodata] = np.nan
 
             if "heat_stress" in raster_name.lower():
                 plot_data = plot_data / 100
