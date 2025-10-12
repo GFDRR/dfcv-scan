@@ -429,6 +429,7 @@ class ChoroplethWidget:
             box = widgets.HBox(
                 [self.conflict_data_source, self.asset, self.conflict_column]
             )
+            controls_list.insert(0, box)
         elif self.enable_exposure:
             box = [self.asset, self.exposure_type]
             if self.enable_conflict_exposure:
