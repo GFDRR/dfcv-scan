@@ -722,6 +722,7 @@ class DatasetManager:
         osm = osm.rename(
             columns={"category": "osm_category", "amenity": "osm_amenity"}
         )
+        osm = gpd.sjoin(osm, self.geoboundary, how="inner", predicate="within")
         osm.to_file(out_file, driver="GeoJSON")
         return osm
 
