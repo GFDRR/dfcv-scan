@@ -135,12 +135,12 @@ def _humanize(value, number=None) -> str:
         text = humanize.intword(value, formatter)
         text = text.replace(" thousand", "k")
         text = text.replace(" million", "M")
-        text = text.replace(" billion", "G")
+        text = text.replace(" billion", "B")
 
         # Remove trailing .0 for K, M, and B
         text = text.replace(".0k", "k")
         text = text.replace(".0M", "M")
-        text = text.replace(".0G", "G")
+        text = text.replace(".0B", "B")
 
         return text
 
