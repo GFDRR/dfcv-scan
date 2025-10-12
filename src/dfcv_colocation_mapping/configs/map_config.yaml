@@ -269,7 +269,7 @@ var_titles:
     conflict_idp_total: "Number of IDPs from Conflicts"
     idp_total: "Number of IDPs"
     conflict_count: "Number of Conflict Events Affecting {}"
-    fatalities_per_conflict: "Fatalities per Conflict"
+    fatalities_per_conflict: "Fatalities per Conflict Affecting {}"
     fatalities: "Number of Fatalities"
     intensity_weighted_exposure_relative: "Intensity-weighted Relative {} Exposure to {}"
     exposure_relative: "Relative {} Exposure to {}"
