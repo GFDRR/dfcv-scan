@@ -238,8 +238,9 @@ asset_alias:
     worldpop: "Population"
 
 hazard_alias:
-    landslide_earthquake: "Earthquake-triggered Landslide"
-    landslide_precip: "Precipitation-triggered Landslide"
+    landslide_earthquake_gfdrr: "Earthquake-triggered Landslide"
+    landslide_precip_gfdrr: "Precipitation-triggered Landslide"
+    fluvial_flood_cdri: "Fluvial Flood"
 
 legend_titles:
     disaster_idp_total: "Number of IDPs \nfrom Disasters"
