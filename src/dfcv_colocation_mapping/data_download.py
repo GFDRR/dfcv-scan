@@ -378,6 +378,10 @@ class DatasetManager:
         p: float = 0.5,
         epsilon: float = 0.00001,
     ) -> gpd.GeoDataFrame:
+        """
+        Calculates multi-hazard scores (MHS) across hazard types using arithmetic,
+        geometric, or power mean aggregation. Optionally multiplies MHS by conflict exposure.
+        """
 
         # Ensure relative exposure columns exist for all hazard columns
         for asset_name in self.asset_names:
@@ -394,90 +398,78 @@ class DatasetManager:
                             )
                         )
 
+        # Scale worldcover columns if needed
         for column in data.columns:
             if "worldcover" in column and "relative" not in column:
                 data[column] = data[column] * 0.01
 
+        # Prepare hazard categories and unified dict
+        hazard_dicts = [
+            self.config["hazards"][cat] for cat in self.config["hazards"]
+        ]
+        categories = list(self.config["hazards"].keys())
+
+        all_hazards = {k: v for d in hazard_dicts for k, v in d.items()}
+        hazard_dicts.append(all_hazards)
+        categories.append("all")
+
         # Loop through each suffix to calculate MHS
         for suffix in suffixes:
-            # Prepare hazard columns and normalized weights
-            hazard_dicts, categories = [], list(self.config["hazards"].keys())
-            for category in categories:
-                hazard_dicts.append(self.config["hazards"][category])
-
-            all_hazards = reduce(lambda a, b: {**a, **b}, hazard_dicts)
-            hazard_dicts.append(all_hazards)
-            categories.append("all")
-
             for hazard_dict, category in zip(hazard_dicts, categories):
-                for asset in self.config["asset_data"]:
-                    asset = asset.replace("global_", "")
-                    hazard_cols = [
-                        f"{hazard}_{asset}_{suffix}" if suffix else hazard
-                        for hazard in hazard_dict
-                        if (f"{hazard}_{asset}_{suffix}" if suffix else hazard)
-                        in data.columns
-                    ]
+                for asset in self.asset_names:
+                    # Collect available hazard columns for this asset/suffix
+                    hazards, hazard_cols = [], []
+                    for hazard in hazard_dict:
+                        hazard_col = f"{hazard}_{asset}_{suffix}"
+                        if hazard_col in data.columns:
+                            if not (data[hazard_col] == 0).all():
+                                hazard_cols.append(hazard_col)
+                                hazards.append(hazard)
 
-                    total_weight = sum(list(hazard_dict.values()))
+                    if len(hazards) == 0:
+                        continue
+
+                    # Align weights to existing hazard columns
                     weights = np.array(
-                        [hazard_dict[hazard] for hazard in hazard_dict]
+                        [hazard_dict[hazard] for hazard in hazards]
                     )
-                    if total_weight > 0:
-                        weights = weights / total_weight
+                    weights = weights / weights.sum()
 
-                    # Select only columns that exist in data
-                    hazard_cols = [
-                        col for col in hazard_cols if col in data.columns
-                    ]
-                    weights = weights[: len(hazard_cols)]
+                    # Compute MHS using selected aggregation
+                    if aggregation == "power_mean":
+                        mhs = (
+                            (data[hazard_cols] ** p)
+                            .multiply(weights, axis=1)
+                            .sum(axis=1)
+                        ) ** (1 / p)
 
-                    # Compute MHS using vectorized operations
-                    if self.mhs_aggregation == "power_mean":
-                        mhs = (data[hazard_cols] ** p).multiply(
-                            weights, axis=1
-                        ).sum(axis=1) ** (1 / p)
-
-                    elif self.mhs_aggregation == "geometric_mean":
+                    elif aggregation == "geometric_mean":
                         mhs = (
                             (data[hazard_cols] + epsilon)
-                            .pow(weights)
+                            .pow(weights, axis=1)
                             .prod(axis=1)
                         )
 
-                    elif self.mhs_aggregation == "arithmetic_mean":
+                    elif aggregation == "arithmetic_mean":
                         mhs = (
                             data[hazard_cols]
                             .multiply(weights, axis=1)
                             .sum(axis=1)
                         )
 
-                    # Add MHS column (scaled 0-1)
-                    mhs_name = "mhs"
-                    if suffix is not None:
-                        mhs_name = f"{mhs_name}_{category}_{asset}_{suffix}"
+                    # Add scaled MHS column
+                    mhs_name = f"mhs_{category}_{asset}_{suffix}"
                     data[mhs_name] = data_utils._minmax_scale(mhs)
 
-                    # Optionally scale MHS by conflict
+                    # Multiply MHS by conflict exposure (scaled)
                     for conflict_column in conflict_columns:
-                        mhsc_name = f"mhs_{category}_{conflict_column}"
-
-                        if suffix is not None:
-                            mhsc_name = f"{mhsc_name}_{asset}_{suffix}"
-
-                        for csuffix in suffixes:
-                            if (
-                                f"{conflict_column}_{asset}_{csuffix}"
-                                in data.columns
-                            ):
-                                conflict_scaled = data_utils._minmax_scale(
-                                    data[
-                                        f"{conflict_column}_{asset}_{csuffix}"
-                                    ]
-                                )
-                                data[mhsc_name] = (
-                                    data[mhs_name] * conflict_scaled
-                                )
+                        conflict_col = f"{conflict_column}_{asset}_{suffix}"
+                        if conflict_col in data.columns:
+                            conflict_scaled = data_utils._minmax_scale(
+                                data[conflict_col]
+                            )
+                            mhsc_name = f"{mhs_name}_{conflict_column}"
+                            data[mhsc_name] = data[mhs_name] * conflict_scaled
 
         return data
 
