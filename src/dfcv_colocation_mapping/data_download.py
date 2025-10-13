@@ -468,7 +468,7 @@ class DatasetManager:
                             conflict_scaled = data_utils._minmax_scale(
                                 data[conflict_col]
                             )
-                            mhsc_name = f"{mhs_name}_{conflict_column}"
+                            mhsc_name = f"mhs_{category}_{conflict_column}_{asset}_{suffix}"
                             data[mhsc_name] = data[mhs_name] * conflict_scaled
 
         return data
@@ -709,13 +709,11 @@ class DatasetManager:
             osm.append(data[["geometry", "amenity", "category"]])
 
         osm = gpd.GeoDataFrame(pd.concat(osm)).reset_index().to_crs(self.crs)
-        osm = osm.sjoin(self.geoboundary, how="left", predicate="intersects")
-        osm = osm.drop(["index_right"], axis=1)
-
         osm = osm.rename(
             columns={"category": "osm_category", "amenity": "osm_amenity"}
         )
-        osm = gpd.sjoin(osm, self.geoboundary, how="inner", predicate="within")
+        osm = osm.sjoin(self.geoboundary, how="left", predicate="intersects")
+        osm = osm.drop(["index_right"], axis=1)
         osm.to_file(out_file, driver="GeoJSON")
         return osm
 
