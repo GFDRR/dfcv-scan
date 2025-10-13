@@ -1258,7 +1258,7 @@ class GeoPlot:
             }
 
         # Convert relative variables to percentages
-        if "relative" in var and "index" not in legend_title.lower():
+        if "%" in legend_title.lower():
             data[var] = data[var] * 100
 
         # Determine min/max bounds
@@ -1339,7 +1339,7 @@ class GeoPlot:
 
             # Create human-readable labels for bins
             labels = [
-                f"{data_utils._humanize(round(var_bins[i], 2))} – {data_utils._humanize(round(var_bins[i+1], 2))}"
+                f"{data_utils._humanize(var_bins[i])} – {data_utils._humanize(var_bins[i+1])}"
                 for i in range(nbins)
             ]
 
