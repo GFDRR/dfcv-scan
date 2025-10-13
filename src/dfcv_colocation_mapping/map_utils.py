@@ -667,7 +667,7 @@ class GeoPlot:
             center1 = bb1.y0 + h1 / 2
 
             # position second legend right below first
-            new_y = center1 - (h1 / 2 + h2 / 2) - 0.05
+            new_y = center1 - (h1 / 2 + h2 / 2) - 0.075
             temp_legend.remove()
 
             # draw final version
