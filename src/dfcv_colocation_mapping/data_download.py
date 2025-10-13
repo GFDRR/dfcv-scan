@@ -42,13 +42,14 @@ from dtmapi import DTMApi
 # Local package import
 from dfcv_colocation_mapping import data_utils
 
+pd.set_option("future.no_silent_downcasting", True)
 simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 ox.settings.max_query_area_size = 500000000000000
 logging.basicConfig(level=logging.INFO, force=True)
 io_logger = logging.getLogger("pyogrio._io")
 io_logger.setLevel(logging.WARNING)
 
-WARNING = "\033[94m"
+WARNING = "\033[31m"
 RESET = "\033[0m"
 
 
@@ -745,10 +746,20 @@ class DatasetManager:
         )
 
         if self.overwrite or not os.path.exists(gidd_file):
-            idmc_gidd_url = self.config["urls"]["idmc_gidd_url"].format(
-                self.idmc_key, self.iso_code, cause
-            )
-            self._download_url_progress(idmc_gidd_url, gidd_file)
+            try:
+                idmc_gidd_url = self.config["urls"]["idmc_gidd_url"].format(
+                    self.idmc_key, self.iso_code, cause
+                )
+                self._download_url_progress(idmc_gidd_url, gidd_file)
+            except:
+                logging.info(
+                    f"{WARNING}WARNING: IDMC data failed to download.{RESET}"
+                )
+                logging.info(
+                    f"{WARNING}Please ensure you IDMC API key is correct.{RESET}"
+                )
+                return
+
             idmc_gidd = gpd.read_file(gidd_file, use_arrow=True)
             idmc_gidd = idmc_gidd.sjoin(
                 self.geoboundary, how="left", predicate="intersects"
@@ -892,6 +903,9 @@ class DatasetManager:
                 logging.info(
                     f"{WARNING}WARNING: Network connection to dtm.iom.int could not be established.{RESET}"
                 )
+                logging.info(
+                    f"{WARNING}WARNING: DTM data failed to download.{RESET}"
+                )
                 return
 
         if (
@@ -999,8 +1013,14 @@ class DatasetManager:
         )
 
         if self.overwrite or not os.path.exists(global_file):
-            dataset = f"{self.global_name}_{self.ucdp_name}".lower()
-            self.download_url(dataset=dataset, ext="csv")
+            try:
+                dataset = f"{self.global_name}_{self.ucdp_name}".lower()
+                self.download_url(dataset=dataset, ext="csv")
+            except:
+                logging.info(
+                    f"{WARNING}WARNING: UCDP Data failed to download.{RESET}"
+                )
+                return
 
         if self.overwrite or not os.path.exists(local_file):
             ucdp = pd.read_csv(global_file, low_memory=False)
@@ -1049,96 +1069,99 @@ class DatasetManager:
         ucdp = gpd.read_file(local_file)
 
         if aggregate:
-            ucdp_agg = None
-            admin = self.geoboundary
+            ucdp = self._aggregate_ucdp(ucdp, local_file)
 
-            for asset_name, asset_file in (
-                pbar := tqdm(
-                    zip(self.asset_names, self.asset_files),
-                    total=len(self.asset_names),
-                )
-            ):
-                pbar.set_description(f"Processing {asset_name}")
-                column = f"{self.ucdp_name.lower()}_{asset_name}_exposure"
-                exposure_raster = self._build_filename(
-                    self.iso_code,
-                    f"{self.ucdp_name}_{asset_name}_exposure",
-                    self.local_dir,
-                    ext="tif",
-                )
-                exposure_vector = self._build_filename(
-                    self.iso_code,
-                    f"{self.ucdp_name}_{asset_name}_exposure_{self.adm_level}",
-                    self.local_dir,
-                    ext="geojson",
-                )
+        return ucdp
 
-                if self.overwrite or not os.path.exists(exposure_vector):
-                    out_tif = self._calculate_custom_conflict_exposure(
-                        local_file,
-                        asset_file,
-                        asset_name=asset_name,
-                        conflict_src="ucdp",
-                    )
-                    out_tif, _ = self._calculate_exposure(
-                        asset_file, out_tif, exposure_raster, threshold=1
-                    )
+    def _aggregate_ucdp(self, ucdp, local_file: str):
+        ucdp_agg = None
+        admin = self.geoboundary
 
-                    self._calculate_zonal_stats(
-                        out_tif,
-                        column=column,
-                        stats_agg=["sum"],
-                        out_file=exposure_vector,
-                    )
-
-                # Read exposure vector and clean zero values
-                ucdp_agg_sub = gpd.read_file(exposure_vector)
-                ucdp_agg_sub.loc[ucdp_agg_sub[column] == 0, column] = None
-
-                ucdp_agg = (
-                    ucdp_agg_sub
-                    if ucdp_agg is None
-                    else data_utils._merge_data(
-                        [ucdp_agg, ucdp_agg_sub], columns=self.merge_columns
-                    )
-                )
-
-            final_exposure_vector = self._build_filename(
+        for asset_name, asset_file in (
+            pbar := tqdm(
+                zip(self.asset_names, self.asset_files),
+                total=len(self.asset_names),
+            )
+        ):
+            pbar.set_description(f"Processing {asset_name}")
+            column = f"{self.ucdp_name.lower()}_{asset_name}_exposure"
+            exposure_raster = self._build_filename(
                 self.iso_code,
-                f"{self.ucdp_name}_exposure_{self.adm_level}",
+                f"{self.ucdp_name}_{asset_name}_exposure",
+                self.local_dir,
+                ext="tif",
+            )
+            exposure_vector = self._build_filename(
+                self.iso_code,
+                f"{self.ucdp_name}_{asset_name}_exposure_{self.adm_level}",
                 self.local_dir,
                 ext="geojson",
             )
-            # Aggregate total conflict events
-            column = "total_conflict_count"
-            event_count = self._aggregate_data(
-                ucdp, agg_col=column, agg_func="count"
+
+            if self.overwrite or not os.path.exists(exposure_vector):
+                out_tif = self._calculate_custom_conflict_exposure(
+                    local_file,
+                    asset_file,
+                    asset_name=asset_name,
+                    conflict_src="ucdp",
+                )
+                out_tif, _ = self._calculate_exposure(
+                    asset_file, out_tif, exposure_raster, threshold=1
+                )
+
+                self._calculate_zonal_stats(
+                    out_tif,
+                    column=column,
+                    stats_agg=["sum"],
+                    out_file=exposure_vector,
+                )
+
+            # Read exposure vector and clean zero values
+            ucdp_agg_sub = gpd.read_file(exposure_vector)
+            ucdp_agg_sub.loc[ucdp_agg_sub[column] == 0, column] = None
+
+            ucdp_agg = (
+                ucdp_agg_sub
+                if ucdp_agg is None
+                else data_utils._merge_data(
+                    [ucdp_agg, ucdp_agg_sub], columns=self.merge_columns
+                )
             )
-            event_count = event_count.rename(
-                columns={column: f"ucdp_{column}"}
-            )
-            event_count = data_utils._merge_data(
-                [admin, event_count],
-                columns=[f"{self.adm_level}_ID"],
-                how="left",
-            )
-            fatalities_count = self._aggregate_data(
-                ucdp, agg_col="best", agg_func="sum"
-            )
-            fatalities_count = fatalities_count.rename(
-                columns={"best": "ucdp_total_fatalities"}
-            )
-            fatalities_count = data_utils._merge_data(
-                [admin, fatalities_count],
-                columns=[f"{self.adm_level}_ID"],
-                how="left",
-            )
-            ucdp = data_utils._merge_data(
-                [event_count, fatalities_count, ucdp_agg],
-                columns=self.merge_columns,
-            )
-            self._calculate_conflict_stats(ucdp, source="ucdp")
-            ucdp.to_file(final_exposure_vector)
+
+        final_exposure_vector = self._build_filename(
+            self.iso_code,
+            f"{self.ucdp_name}_exposure_{self.adm_level}",
+            self.local_dir,
+            ext="geojson",
+        )
+        # Aggregate total conflict events
+        column = "total_conflict_count"
+        event_count = self._aggregate_data(
+            ucdp, agg_col=column, agg_func="count"
+        )
+        event_count = event_count.rename(columns={column: f"ucdp_{column}"})
+        event_count = data_utils._merge_data(
+            [admin, event_count],
+            columns=[f"{self.adm_level}_ID"],
+            how="left",
+        )
+        fatalities_count = self._aggregate_data(
+            ucdp, agg_col="best", agg_func="sum"
+        )
+        fatalities_count = fatalities_count.rename(
+            columns={"best": "ucdp_total_fatalities"}
+        )
+        fatalities_count = data_utils._merge_data(
+            [admin, fatalities_count],
+            columns=[f"{self.adm_level}_ID"],
+            how="left",
+        )
+        ucdp = data_utils._merge_data(
+            [event_count, fatalities_count, ucdp_agg],
+            columns=self.merge_columns,
+        )
+        self._calculate_conflict_stats(ucdp, source="ucdp")
+        ucdp.to_file(final_exposure_vector)
 
         return ucdp
 
@@ -1186,7 +1209,7 @@ class DatasetManager:
                     )
                     if response.status_code != 200:
                         logging.info(
-                            f"{WARNING}WARNING: ACLED failed to download.{RESET}"
+                            f"{WARNING}WARNING: ACLED data failed to download.{RESET}"
                         )
                         logging.info(
                             f"{WARNING}ACLED Response Code: {response.status_code}{RESET}"
@@ -1200,7 +1223,7 @@ class DatasetManager:
 
                 except Exception as e:
                     logging.info(
-                        f"{WARNING}WARNING: ACLED failed to download.{RESET}"
+                        f"{WARNING}WARNING: ACLED data failed to download.{RESET}"
                     )
                     logging.info(f"{WARNING}{e}{RESET}")
                     return
@@ -1335,7 +1358,6 @@ class DatasetManager:
         asset_file: str,
         prefix: str = "wbg",
     ):
-
         # Read the ACLED raw data if it exists
         if not os.path.exists(acled_file):
             raise FileNotFoundError(f"ACLED file not found: {acled_file}")
