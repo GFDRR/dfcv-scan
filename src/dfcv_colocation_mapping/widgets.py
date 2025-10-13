@@ -578,6 +578,7 @@ class BivariateChoroplethWidget:
             value="ACLED",
             description="Points:",
         )
+
         self.points_column = widgets.Dropdown(
             options=[
                 "disorder_type",
@@ -587,7 +588,41 @@ class BivariateChoroplethWidget:
                 "osm_category",
             ],
             value="disorder_type",
-            description="Points col:",
+            description="Points column:",
+        )
+
+        self.point_columns_by_source = {
+            "ACLED": ["disorder_type", "event_type", "sub_event_type"],
+            "UCDP": ["type_of_violence"],
+            "OSM": ["osm_category"],
+        }
+
+        self.points.observe(self._on_points_source_change, names="value")
+        self._on_points_source_change({"new": self.points.value})
+
+        self.markerscale = widgets.FloatSlider(
+            value=20,
+            min=5,
+            max=100,
+            step=1,
+            description="Marker scale:",
+            continuous_update=False,
+        )
+        self.alpha = widgets.FloatSlider(
+            value=0.7,
+            min=0.1,
+            max=1.0,
+            step=0.05,
+            description="Alpha:",
+            continuous_update=False,
+        )
+        self.legend1_y = widgets.FloatSlider(
+            value=0.30,
+            min=0.0,
+            max=1.0,
+            step=0.05,
+            description="Legend Y:",
+            continuous_update=False,
         )
 
         self.run_button = widgets.Button(
@@ -600,6 +635,18 @@ class BivariateChoroplethWidget:
 
         # Layout
         self._build_layout()
+
+    def _on_points_source_change(self, change):
+        """Update available columns when the points source changes."""
+        source = change["new"]
+        valid_columns = self.point_columns_by_source.get(source, [])
+        self.points_column.options = valid_columns
+
+        # Keep value valid if possible
+        if self.points_column.value not in valid_columns:
+            self.points_column.value = (
+                valid_columns[0] if valid_columns else None
+            )
 
     def _get_adm_options(self, level):
         """Return available region names for the ADM level."""
@@ -655,9 +702,9 @@ class BivariateChoroplethWidget:
                     self.points_column.value,
                     dataset=self.points.value.lower(),
                     kwargs={
-                        "alpha": 1,
-                        "legend_y": 0.30,
-                        "markerscale": 1,
+                        "alpha": self.alpha.value,
+                        "legend1_y": self.legend1_y.value,
+                        "markerscale": self.markerscale.value,
                         "cmap": "tab10",
                     },
                     zoom_to=zoom_to,
@@ -681,6 +728,9 @@ class BivariateChoroplethWidget:
         points_box = widgets.VBox(
             [self.overlay_points, self.points, self.points_column]
         )
+        style_box = widgets.VBox(
+            [self.markerscale, self.alpha, self.legend1_y]
+        )
 
         controls = widgets.VBox(
             [
@@ -690,6 +740,7 @@ class BivariateChoroplethWidget:
                 self.binning,
                 region_box,
                 points_box,
+                style_box,
                 self.run_button,
             ]
         )
