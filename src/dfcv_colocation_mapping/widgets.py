@@ -289,14 +289,17 @@ class ChoroplethWidget:
             value=False, description="Zoom to region"
         )
 
+        adm_options = ["ADM1", "ADM2"]
+        if dm.group is not None:
+            adm_options = [dm.group] + adm_options
         self.adm_level = widgets.Dropdown(
-            options=["ADM1", "ADM2"],
-            value="ADM1",
+            options=adm_options,
+            value=adm_options[0],
             description="ADM Level:",
         )
 
         self.adm_string = widgets.Dropdown(
-            options=self._get_adm_options("ADM1"),
+            options=self._get_adm_options(adm_options[0]),
             description="Region:",
         )
 
@@ -560,13 +563,16 @@ class BivariateChoroplethWidget:
         self.zoom_to_region = widgets.Checkbox(
             value=False, description="Zoom to region"
         )
+        adm_options = ["ADM1", "ADM2"]
+        if dm.group is not None:
+            adm_options = [dm.group] + adm_options
         self.adm_level = widgets.Dropdown(
-            options=["ADM1", "ADM2"],
-            value="ADM1",
+            options=adm_options,
+            value=adm_options[0],
             description="ADM Level:",
         )
         self.adm_string = widgets.Dropdown(
-            options=self._get_adm_options("ADM1"),
+            options=self._get_adm_options(adm_options[0]),
             description="Region:",
         )
 
