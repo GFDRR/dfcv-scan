@@ -256,8 +256,9 @@ class DatasetManager:
         return base, agg
 
     def _assign_grouping(self, iso_code, data, config):
+        group = None
         if iso_code not in config:
-            return data
+            return data, group
 
         config = config[iso_code]
         group = config["group"]
@@ -270,7 +271,7 @@ class DatasetManager:
             # Map administrative level to group
             data[group] = data[adm_level].map(grouping)
 
-        return data
+        return data, group
 
     def download_datasets(self):
         os.makedirs(self.data_dir, exist_ok=True)
@@ -328,11 +329,6 @@ class DatasetManager:
         logging.info("Calculating Multihazard Scores...")
         self.data = self._combine_datasets()
         self.data = self._calculate_multihazard_score(self.data)
-
-        # Load admin config and assign grouping
-        self.data = self._assign_grouping(
-            self.iso_code, self.data, self.adm_config
-        )
 
         logging.info("Downloading OSM...")
         self.osm = self.download_osm()
@@ -554,7 +550,10 @@ class DatasetManager:
                 for index in range(1, level + 1):
                     adm_level = f"ADM{index}"
                     intermediate_file = self._build_filename(
-                        self.iso_code, adm_level, self.local_dir, ext="geojson"
+                        self.iso_code,
+                        f"{adm_source}_{adm_level}",
+                        self.local_dir,
+                        ext="geojson",
                     )
 
                     if not os.path.exists(intermediate_file):
@@ -665,14 +664,30 @@ class DatasetManager:
                 )
 
             geoboundary.to_crs(self.crs).to_file(out_file)
-            logging.info(
-                f"Geoboundary file saved to {os.path.basename(out_file)}."
-            )
 
         # Load final geoboundary and update attributes
         geoboundary = gpd.read_file(out_file).to_crs(self.crs)
 
+        out_file = self._build_filename(
+            self.iso_code,
+            adm_level,
+            self.local_dir,
+            ext="geojson",
+        )
+        group = None
+        if not overwrite and not os.path.exists(out_file):
+            geoboundary, group = self._assign_grouping(
+                self.iso_code, geoboundary, self.adm_config
+            )
+            geoboundary.to_crs(self.crs).to_file(out_file)
+            logging.info(
+                f"Geoboundary file saved to {os.path.basename(out_file)}."
+            )
+
+        geoboundary = gpd.read_file(out_file)
+
         if adm_level == self.adm_level:
+            self.group = group
             self.admin_file = out_file
             self.adm_source = adm_source
             self.merge_columns = list(geoboundary.columns)
@@ -1845,7 +1860,7 @@ class DatasetManager:
                         f"ESA_WorldCover_10m_{year}_{version}_{tile}_Map.tif"
                     )
                     filename = os.path.join(out_dir, raw_name)
-                    if not os.path.exists(worldcover_file):
+                    if not os.path.exists(filename):
                         url = (
                             f"{worldcover_url}/{version}/{year}/map/{raw_name}"
                         )
