@@ -956,6 +956,9 @@ class DatasetManager:
                 )
 
             if len(dtm) == 0:
+                logging.info(
+                    f"{WARNING}WARNING: No DTM data available for {self.iso_code} ({self.country}).{RESET}"
+                )
                 return
 
             dtm.to_csv(raw_file)
