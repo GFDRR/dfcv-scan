@@ -2,6 +2,7 @@ import re
 import os
 import math
 import copy
+import logging
 import warnings
 from datetime import datetime
 import importlib_resources
@@ -42,6 +43,9 @@ from shapely.geometry import MultiPoint
 
 from dfcv_colocation_mapping import data_utils
 from vincenty import vincenty
+
+WARNING = "\033[31m"
+RESET = "\033[0m"
 
 
 class GeoPlot:
@@ -439,9 +443,15 @@ class GeoPlot:
             for key, value in zoom_to.items():
                 selected = data[data[key].isin([value])].to_crs(config["crs"])
                 if selected.empty:
-                    raise ValueError(f"{value} is not in {key}.")
+                    logging.info(
+                        f"{WARNING}No points available for {value}.{RESET}"
+                    )
                 subdata.append(selected)
             data = gpd.GeoDataFrame(pd.concat(subdata), geometry="geometry")
+
+        if len(data) == 0:
+            logging.info(f"{WARNING}{dataset.upper()} is empty.{RESET}")
+            return
 
         data = data.to_crs("EPSG:4326").copy()
         data["lon"] = data.geometry.x
@@ -667,7 +677,7 @@ class GeoPlot:
             center1 = bb1.y0 + h1 / 2
 
             # position second legend right below first
-            new_y = center1 - (h1 / 2 + h2 / 2) - 0.075
+            new_y = center1 - (h1 / 2 + h2 / 2) - 0.065
             temp_legend.remove()
 
             # draw final version
@@ -1899,8 +1909,8 @@ class GeoPlot:
         config_key: str,
         asset: str = None,
         legend: bool = False,
-        mhs_name: str = "Multihazard",
-        conflict_name: str = "Conflict",
+        mhs_name: str = "Multihazards",
+        conflict_name: str = "Conflicts",
     ) -> str:
         """
         Generate a formatted legend title for a given variable based on configuration.
@@ -1992,7 +2002,7 @@ class GeoPlot:
                     else f"{category.title()} {mhs_name}"
                 )
                 if any(tag in var for tag in ("acled", "ucdp")):
-                    fill += f"-{conflict_name}"
+                    fill = f"{fill} & {conflict_name}"
 
                 if legend:
                     title = template.format(fill, asset_name)
