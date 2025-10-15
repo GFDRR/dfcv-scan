@@ -1835,8 +1835,8 @@ class GeoPlot:
                 subtitle = f"Displacement events from {start_date.year} to {end_date.year}"
 
             elif "dtm" in annotation.lower():
-                year = self.dm.dtm_filtered.yearReportingDate.unique()[0]
-                round_number = self.dm.dtm_filtered.roundNumber.unique()[0]
+                year = self.dm.dtm.yearReportingDate.unique()[0]
+                round_number = self.dm.dtm.roundNumber.unique()[0]
                 subtitle = (
                     f"Displacement events in {year} (Round {round_number})"
                 )
