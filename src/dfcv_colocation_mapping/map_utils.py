@@ -18,6 +18,7 @@ from matplotlib.colors import ListedColormap
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.patches import Circle
 from matplotlib.legend_handler import HandlerPatch
+from matplotlib.legend import Legend
 
 import colormaps as cmaps
 import rasterio as rio
@@ -48,6 +49,18 @@ WARNING = "\033[31m"
 RESET = "\033[0m"
 
 
+def get_cmap(cmap):
+    if cmap == "bold":
+        cmap = cmaps.bold
+    elif cmap == "set2":
+        cmap = cmaps.set2
+    elif cmap == "tableau_20":
+        cmap = cmaps.tableau_20
+    elif cmap == "trafficlight_9":
+        cmap = cmaps.trafficlight_9
+    return cmap
+
+
 class GeoPlot:
     def __init__(
         self, dm, data_dir: str = "data/", map_config_file: str = None
@@ -66,7 +79,6 @@ class GeoPlot:
         """
 
         self.dm = dm
-        self.data = dm.data  # Store the dataset from the data manager
         self.data_dir = data_dir
 
         # Load package resources
@@ -77,7 +89,6 @@ class GeoPlot:
             map_config_file = resources.joinpath("configs", "map_config.yaml")
 
         self.map_config_file = map_config_file
-
         self.regular_font = pyfonts.load_google_font("Roboto")
         self.bold_font = pyfonts.load_google_font("Roboto", weight="bold")
 
@@ -167,7 +178,7 @@ class GeoPlot:
             )
 
         if data is None:
-            data = self.data.copy()
+            data = self.dm.data.copy()
         original_crs = data.crs
 
         # Ensure data is not empty
@@ -318,7 +329,7 @@ class GeoPlot:
                     src.bounds.bottom,
                     src.bounds.top,
                 ],
-                cmap=config["cmap"],
+                cmap=get_cmap(config["cmap"]),
                 origin="upper",
             )
 
@@ -396,28 +407,146 @@ class GeoPlot:
 
         return ax
 
-    def plot_points(
+    def _collate_osm_tags(self, osm_data, tags):
+        """
+        Combine OSM tag layers into one GeoDataFrame, ordering features
+        so that sparser layers are plotted on top when calling .plot().
+        """
+        # Collect GeoDataFrames and record their sizes
+        gdfs_with_counts = []
+        for tag in tags:
+            gdf = osm_data[tag].copy()
+            gdfs_with_counts.append((len(gdf), gdf))
+
+        # Sort by feature count
+        gdfs_with_counts.sort(key=lambda x: x[0], reverse=True)
+
+        # Concatenate — denser ones first, sparser last
+        ordered_gdfs = [gdf for _, gdf in gdfs_with_counts]
+        combined = gpd.GeoDataFrame(pd.concat(ordered_gdfs, ignore_index=True))
+
+        return combined
+
+    def plot_lines(
         self,
-        column: str = None,
         data: gpd.GeoDataFrame = None,
-        dataset: str = "acled",
-        asset: str = "worldpop",
+        dataset: str = "osm",
+        osm_tags: list = [],
         ax: matplotlib.axes.Axes = None,
         xpos: float = None,
         zoom_to: dict = None,
+        zorder: int = 1,
         kwargs: dict = None,
-        key: str = "points",
+        key: str = "lines",
     ):
         self.refresh()
         if kwargs is not None:
             self.update(key, kwargs)
         config = self.map_config[key]
 
-        if data is None:
-            data = self.data.copy()
+        if ax is None or xpos is None:
+            ax, xpos = self.plot_geoboundaries(
+                adm_level=self.dm.adm_level, zoom_to=zoom_to
+            )
 
-        if ax is None:
-            ax, xpos = self.plot_geoboundaries(adm_level=self.dm.adm_level)
+        xpos = config.get("legend_x", xpos)
+        ypos = config.get("legend_y", 0.3)
+        bbox_to_anchor = [xpos, ypos]
+
+        if dataset == "osm":
+            column = "tag"
+            data = self._collate_osm_tags(self.dm.osm_networks, osm_tags)
+            data[column] = data[column].str.replace("_", " ").str.title()
+
+        if len(data) == 0:
+            warnings.warn(f"{dataset.upper()} is empty.")
+            return
+
+        geoboundary = self.dm.geoboundary
+        if zoom_to is not None:
+            geoboundaries = []
+            for key, value in zoom_to.items():
+                selected = self.dm.data[
+                    self.dm.data[key].isin([value])
+                ].to_crs(config["crs"])
+                geoboundaries.append(selected)
+            geoboundary = gpd.GeoDataFrame(
+                pd.concat(geoboundaries), geometry="geometry"
+            )
+
+        geoboundary = geoboundary.to_crs(config["crs"])
+
+        networks = gpd.clip(data.to_crs(config["crs"]), geoboundary)
+        networks.geometry = networks.geometry.simplify(
+            tolerance=config["tolerance"], preserve_topology=False
+        )
+
+        # Unique categories
+        categories = networks[column].unique()
+        cmap = get_cmap(config["cmap"])
+        colors = {cat: cmap(i) for i, cat in enumerate(categories)}
+
+        # Plot each category manually (so colors match handles)
+        for cat, color in colors.items():
+            subset = networks[networks[column] == cat].to_crs(config["crs"])
+            subset.plot(
+                ax=ax,
+                color=color,
+                alpha=config["alpha"],
+                lw=config["linewidth"],
+                label=cat,
+                zorder=zorder,
+            )
+
+        handles = [
+            mlines.Line2D(
+                [], [], color=color, lw=config["linewidth"], label=cat
+            )
+            for cat, color in colors.items()
+        ]
+
+        legend = Legend(
+            ax,
+            labels=categories,
+            handles=handles,
+            loc="center left",
+            fontsize=config["legend_label_fontsize"],
+            title_fontsize=config["legend_title_fontsize"],
+        )
+        legend.set_bbox_to_anchor(
+            bbox_to_anchor, transform=ax.figure.transFigure
+        )
+        ax.add_artist(legend)
+
+        return ax, xpos
+
+    def plot_points(
+        self,
+        column: str = None,
+        data: gpd.GeoDataFrame = None,
+        dataset: str = "acled",
+        asset: str = "worldpop",
+        osm_tags: list = [],
+        ax: matplotlib.axes.Axes = None,
+        xpos: float = None,
+        zorder: int = 1,
+        zoom_to: dict = None,
+        kwargs: dict = None,
+        key: str = "points",
+    ):
+
+        self.refresh()
+        if kwargs is not None:
+            self.update(key, kwargs)
+        config = self.map_config[key]
+
+        if data is None:
+            data = self.dm.data.copy()
+
+        if ax is None or xpos is None:
+            ax, xpos = self.plot_geoboundaries(
+                adm_level=self.dm.adm_level, zoom_to=zoom_to
+            )
 
         xpos = config.get("legend1_x", xpos - 0.005)
         ypos = config.get("legend1_y", 0.3)
@@ -428,7 +557,9 @@ class GeoPlot:
         elif dataset == "ucdp":
             data = self.dm.ucdp
         elif dataset == "osm":
-            data = self.dm.osm
+            column = "tag"
+            data = self._collate_osm_tags(self.dm.osm_pois, osm_tags)
+            data[column] = data[column].str.replace("_", " ").str.title()
 
         if len(data) == 0:
             warnings.warn(f"{dataset.upper()} is empty.")
@@ -453,13 +584,16 @@ class GeoPlot:
             logging.info(f"{WARNING}{dataset.upper()} is empty.{RESET}")
             return
 
-        data = data.to_crs("EPSG:4326").copy()
+        data = data.to_crs(self.dm.crs).copy()
         data["lon"] = data.geometry.x
         data["lat"] = data.geometry.y
+
         categories = sorted(data[column].unique())
-        cmap = plt.get_cmap(config["cmap"], len(categories))
-        colors = [matplotlib.colors.rgb2hex(c) for c in cmap.colors]
-        markerscale = config["markerscale"]
+        cmap = get_cmap(config["cmap"])
+        colors = [matplotlib.colors.rgb2hex(c) for c in cmap.colors][
+            : len(categories)
+        ]
+
         all_points = []
         handles = []
 
@@ -482,7 +616,8 @@ class GeoPlot:
         def make_legend_ticks(max_count):
             min_val = 5 if max_count <= 20 else 10
             max_val = nice_round(max_count)
-            nice_values = [1, 5, 10, 25, 50, 100, 500, 1000, 5000, 10000]
+            # nice_values = [1, 5, 10, 25, 50, 100, 500, 1000, 5000, 10000]
+            nice_values = [1, 50, 100, 500, 1000, 5000, 10000]
             multiples = [v for v in nice_values if v < max_val]
             ticks = [min_val] + multiples + [max_val]
             if len(ticks) < 3:
@@ -515,191 +650,318 @@ class GeoPlot:
             grouped["category"] = category
             return grouped.to_dict("records")
 
-        for category, color in zip(categories, colors):
-            subdata = data[data[column] == category].copy()
+        if "osm" in dataset:
+            categories = data[column].unique()
+            colors = {cat: cmap(i) for i, cat in enumerate(categories)}
 
-            records = compute_overlap_points(subdata, color, category)
-            all_points.extend(records)
+            # Plot each category manually (so colors match handles)
+            for cat, color in colors.items():
+                subset = data[data[column] == cat].to_crs(config["crs"])
+                subset.plot(
+                    ax=ax,
+                    color=color,
+                    marker=config["marker"],
+                    markersize=config["markerscale"],
+                    alpha=config["alpha"],
+                    lw=config["linewidth"],
+                    label=cat,
+                    zorder=zorder,
+                )
 
-        # Convert to GeoDataFrame
-        all_points = pd.DataFrame(all_points)
-        all_points = gpd.GeoDataFrame(
-            all_points,
-            geometry=gpd.points_from_xy(all_points["lon"], all_points["lat"]),
-            crs="EPSG:4326",
-        )
-        all_points["count_scaled"] = all_points["count"] * markerscale
-        all_points = all_points.sort_values(by="count", ascending=False)
+            handles = [
+                mlines.Line2D(
+                    [],
+                    [],
+                    color=color,
+                    linestyle="None",
+                    marker=config["marker"],
+                    markersize=config["markerscale"],
+                    label=cat,
+                )
+                for cat, color in colors.items()
+            ]
 
-        all_points.to_crs(config["crs"]).plot(
-            ax=ax,
-            facecolor=all_points["color"],
-            legend=False,
-            marker="o",
-            markersize="count_scaled",
-            alpha=config["alpha"],
-            lw=0.1,
-        )
-
-        handles = make_symbol_handles(categories, colors)
-        title = self._get_title(column, "legend_titles")
-
-        legend1 = ax.legend(
-            handles=handles,
-            title=title,
-            loc="center left",
-            markerscale=0.75,
-            fontsize=config["legend_label_fontsize"],
-            title_fontsize=config["legend_title_fontsize"],
-            bbox_to_anchor=bbox_to_anchor,
-            bbox_transform=ax.figure.transFigure,
-        )
-        ax.add_artist(legend1)
-
-        ticks = make_legend_ticks(all_points["count"].max())
-        legends = [
-            mlines.Line2D(
-                [],
-                [],
-                color="silver",
-                lw=0,
-                marker="o",
-                mec="silver",
-                markeredgewidth=1,
-                markersize=np.sqrt(n * markerscale),
-                label=n,
+            legend = Legend(
+                ax,
+                labels=categories,
+                handles=handles,
+                loc="center left",
+                fontsize=config["legend_label_fontsize"],
+                title_fontsize=config["legend_title_fontsize"],
             )
-            for n in ticks
-        ]
+            for leg in legend.legend_handles:
+                leg.set_markersize(np.sqrt(config["markerscale"]) * 2)
+                leg.set_marker(config["marker"])
+            legend.set_bbox_to_anchor(
+                bbox_to_anchor, transform=ax.figure.transFigure
+            )
+            ax.add_artist(legend)
 
-        class HandlerStackedCircles(HandlerPatch):
-            def __init__(
-                self,
-                sizes,
-                labels,
-                title="Number of events",
-                color="silver",
-                **kwargs,
-            ):
-                super().__init__(**kwargs)
-                self.sizes, self.labels, self.title, self.color = (
+        else:
+            for category, color in zip(categories, colors):
+                subdata = data[data[column] == category].copy()
+                records = compute_overlap_points(subdata, color, category)
+                all_points.extend(records)
+
+            # Convert to GeoDataFrame
+            all_points = pd.DataFrame(all_points)
+            all_points = gpd.GeoDataFrame(
+                all_points,
+                geometry=gpd.points_from_xy(
+                    all_points["lon"], all_points["lat"]
+                ),
+                crs="EPSG:4326",
+            )
+            all_points["count_scaled"] = (
+                all_points["count"] * config["markerscale"]
+            )
+            all_points = all_points.sort_values(by="count", ascending=False)
+
+            all_points.to_crs(config["crs"]).plot(
+                ax=ax,
+                facecolor=all_points["color"],
+                legend=False,
+                marker="o",
+                markersize="count_scaled",
+                alpha=config["alpha"],
+                lw=0.1,
+                zorder=zorder,
+            )
+
+            handles = make_symbol_handles(categories, colors)
+            title = self._get_title(column, "legend_titles")
+
+            legend1 = ax.legend(
+                handles=handles,
+                title=title,
+                loc="center left",
+                markerscale=0.75,
+                fontsize=config["legend_label_fontsize"],
+                title_fontsize=config["legend_title_fontsize"],
+                bbox_to_anchor=bbox_to_anchor,
+                bbox_transform=ax.figure.transFigure,
+            )
+            ax.add_artist(legend1)
+
+            ticks = make_legend_ticks(all_points["count"].max())
+            legends = [
+                mlines.Line2D(
+                    [],
+                    [],
+                    color="silver",
+                    lw=0,
+                    marker="o",
+                    mec="silver",
+                    markeredgewidth=1,
+                    markersize=np.sqrt(n * config["markerscale"]),
+                    label=n,
+                )
+                for n in ticks
+            ]
+
+            class HandlerStackedCircles(HandlerPatch):
+                def __init__(
+                    self,
                     sizes,
                     labels,
-                    title,
-                    color,
-                )
-
-            def create_artists(
-                self,
-                legend,
-                orig_handle,
-                xdescent,
-                ydescent,
-                width,
-                height,
-                fontsize,
-                trans,
-            ):
-                artists = []
-                max_r = max(self.sizes) / 2
-                center_x = width / 2 - xdescent
-                bottom_y = height / 2 - ydescent - max_r
-                label_x = center_x + max_r + 5
-                for s, lbl in sorted(
-                    zip(self.sizes, self.labels), reverse=True
+                    title="Number of events",
+                    color="silver",
+                    **kwargs,
                 ):
-                    r = s / 2
-                    c = Circle(
-                        (center_x, bottom_y + r),
-                        radius=r,
-                        facecolor="none",
-                        edgecolor=self.color,
-                        lw=1,
+                    super().__init__(**kwargs)
+                    self.sizes, self.labels, self.title, self.color = (
+                        sizes,
+                        labels,
+                        title,
+                        color,
                     )
-                    c.set_transform(trans)
-                    artists.append(c)
-                    t = plt.Text(
-                        x=label_x,
-                        y=bottom_y + 1.85 * r,
-                        text=str(lbl),
-                        va="center_baseline",
-                        ha="left",
+
+                def create_artists(
+                    self,
+                    legend,
+                    orig_handle,
+                    xdescent,
+                    ydescent,
+                    width,
+                    height,
+                    fontsize,
+                    trans,
+                ):
+                    artists = []
+                    max_r = max(self.sizes) / 2
+                    center_x = width / 2 - xdescent
+                    bottom_y = height / 2 - ydescent - max_r
+                    label_x = center_x + max_r + 5
+                    for s, lbl in sorted(
+                        zip(self.sizes, self.labels), reverse=True
+                    ):
+                        r = s / 2
+                        c = Circle(
+                            (center_x, bottom_y + r),
+                            radius=r,
+                            facecolor="none",
+                            edgecolor=self.color,
+                            lw=1,
+                        )
+                        c.set_transform(trans)
+                        artists.append(c)
+                        t = plt.Text(
+                            x=label_x,
+                            y=bottom_y + 1.85 * r,
+                            text=str(lbl),
+                            va="center_baseline",
+                            ha="left",
+                            fontsize=fontsize,
+                        )
+                        t.set_transform(trans)
+                        artists.append(t)
+                    title_y = bottom_y + 2 * max_r + fontsize
+                    title = plt.Text(
+                        x=center_x,
+                        y=title_y,
+                        text=self.title,
+                        va="bottom",
+                        ha="center",
                         fontsize=fontsize,
+                        fontweight="bold",
                     )
-                    t.set_transform(trans)
-                    artists.append(t)
-                title_y = bottom_y + 2 * max_r + fontsize
-                title = plt.Text(
-                    x=center_x,
-                    y=title_y,
-                    text=self.title,
-                    va="bottom",
-                    ha="center",
-                    fontsize=fontsize,
-                    fontweight="bold",
+                    title.set_transform(trans)
+                    artists.append(title)
+                    return artists
+
+            def add_count_legend(ax, legends, xpos, ypos):
+                sizes = [h.get_markersize() for h in legends]
+                labels = [h.get_label() for h in legends]
+                dummy = Circle((0, 0), radius=1)
+
+                # draw final version
+                xpos = config.get("legend2_x", xpos + 0.035)
+                ypos = config.get("legend2_y", ypos)
+                bbox_to_anchor = [xpos, ypos]
+
+                # create temporary legend2 to measure heights
+                temp_legend = ax.legend(
+                    [dummy],
+                    [""],
+                    handler_map={Circle: HandlerStackedCircles(sizes, labels)},
+                    loc="center left",
+                    frameon=False,
+                    bbox_to_anchor=bbox_to_anchor,
+                    bbox_transform=ax.figure.transFigure,
                 )
-                title.set_transform(trans)
-                artists.append(title)
-                return artists
+                ax.add_artist(temp_legend)
+                ax.figure.canvas.draw()
 
-        def add_count_legend(ax, legends, xpos, ypos):
-            sizes = [h.get_markersize() for h in legends]
-            labels = [h.get_label() for h in legends]
-            dummy = Circle((0, 0), radius=1)
+                renderer = ax.figure.canvas.get_renderer()
+                bb1 = legend1.get_window_extent(renderer).transformed(
+                    ax.figure.transFigure.inverted()
+                )
+                bb2 = temp_legend.get_window_extent(renderer).transformed(
+                    ax.figure.transFigure.inverted()
+                )
+                h1 = bb1.height
+                h2 = bb2.height
+                center1 = bb1.y0 + h1 / 2
 
-            # draw final version
-            xpos = config.get("legend2_x", xpos + 0.035)
-            ypos = config.get("legend2_y", ypos)
-            bbox_to_anchor = [xpos, ypos]
+                # position second legend right below first
+                new_y = center1 - (h1 / 2 + h2 / 2) - 0.065
+                temp_legend.remove()
 
-            # create temporary legend2 to measure heights
-            temp_legend = ax.legend(
-                [dummy],
-                [""],
-                handler_map={Circle: HandlerStackedCircles(sizes, labels)},
-                loc="center left",
-                frameon=False,
-                bbox_to_anchor=bbox_to_anchor,
-                bbox_transform=ax.figure.transFigure,
+                # draw final version
+                ypos = config.get("legend2_y", new_y)
+                bbox_to_anchor = [xpos, ypos]
+
+                legend2 = ax.legend(
+                    [dummy],
+                    [""],
+                    handler_map={Circle: HandlerStackedCircles(sizes, labels)},
+                    loc="center left",
+                    frameon=False,
+                    borderpad=1,
+                    handletextpad=2,
+                    labelspacing=config["labelspacing"],
+                    fontsize=config["legend_label_fontsize"],
+                    bbox_to_anchor=bbox_to_anchor,
+                    bbox_transform=ax.figure.transFigure,
+                )
+                ax.add_artist(legend2)
+
+            add_count_legend(ax, legends, xpos, ypos)
+        return ax, xpos
+
+    def plot_hatches(
+        self,
+        adm_level: str,
+        column: str,
+        data: gpd.GeoDataFrame = None,
+        ax: matplotlib.axes.Axes = None,
+        xpos: float = None,
+        zoom_to: dict = None,
+        zorder: int = 1,
+        kwargs: dict = None,
+        title: str = "",
+        key="hatches",
+    ):
+        self.refresh()
+        if kwargs is not None:
+            self.update(key, kwargs)
+        config = self.map_config[key]
+
+        if ax is None or xpos is None:
+            ax, xpos = self.plot_geoboundaries(
+                adm_level=self.dm.adm_level, zoom_to=zoom_to
             )
-            ax.add_artist(temp_legend)
-            ax.figure.canvas.draw()
 
-            renderer = ax.figure.canvas.get_renderer()
-            bb1 = legend1.get_window_extent(renderer).transformed(
-                ax.figure.transFigure.inverted()
+        if data is None:
+            data = self.dm.data.copy()
+
+        xpos = config.get("legend_x", xpos - 0.005)
+        ypos = config.get("legend_y", 0.3)
+        bbox_to_anchor = [xpos, ypos]
+
+        if zoom_to is not None:
+            data_temp = []
+            for key, value in zoom_to.items():
+                selected = data[data[key].isin([value])].to_crs(config["crs"])
+                data_temp.append(selected)
+            data = gpd.GeoDataFrame(pd.concat(data_temp), geometry="geometry")
+
+        data = data.sort_values(column, ascending=False)
+
+        patches, labels = [], []
+        hatches = config["hatches"]
+        for item, hatch in enumerate(hatches):
+            data.iloc[[item]].to_crs(config["crs"]).plot(
+                ax=ax,
+                column=adm_level,
+                facecolor="none",
+                edgecolor="black",
+                lw=config["linewidth"],
+                hatch=hatch,
+                legend=False,
+                zorder=zorder,
             )
-            bb2 = temp_legend.get_window_extent(renderer).transformed(
-                ax.figure.transFigure.inverted()
+            label = f"{item+1}. {data.iloc[[item]][adm_level].values[0]}"
+            patch = mpatches.Patch(
+                facecolor="none", alpha=1, hatch=hatch, label=label
             )
-            h1 = bb1.height
-            h2 = bb2.height
-            center1 = bb1.y0 + h1 / 2
+            patches.append(patch)
+            labels.append(label)
 
-            # position second legend right below first
-            new_y = center1 - (h1 / 2 + h2 / 2) - 0.065
-            temp_legend.remove()
+        legend = Legend(
+            ax,
+            labels=labels,
+            handles=patches,
+            loc="center left",
+            fontsize=config["legend_label_fontsize"],
+            title_fontsize=config["legend_title_fontsize"],
+        )
+        legend.set_title(title)
+        legend.set_bbox_to_anchor(
+            bbox_to_anchor, transform=ax.figure.transFigure
+        )
+        ax.add_artist(legend)
 
-            # draw final version
-            ypos = config.get("legend2_y", new_y)
-            bbox_to_anchor = [xpos, ypos]
-
-            legend2 = ax.legend(
-                [dummy],
-                [""],
-                handler_map={Circle: HandlerStackedCircles(sizes, labels)},
-                loc="center left",
-                frameon=False,
-                borderpad=1,
-                handletextpad=2,
-                labelspacing=config["labelspacing"],
-                fontsize=config["legend_label_fontsize"],
-                bbox_to_anchor=bbox_to_anchor,
-                bbox_transform=ax.figure.transFigure,
-            )
-            ax.add_artist(legend2)
-
-        add_count_legend(ax, legends, xpos, ypos)
         return ax, xpos
 
     def plot_geoboundaries(
@@ -713,6 +975,7 @@ class GeoPlot:
         group: str = "group",
         max_adms: int = 50,
         max_groups: int = 20,
+        zoom_to: dict = None,
         show_adm_names: bool = True,
         kwargs: dict = None,
         key="geoboundaries",
@@ -750,7 +1013,7 @@ class GeoPlot:
         config = self.map_config[key]
 
         if data is None:
-            data = self.data.copy()
+            data = self.dm.data.copy()
 
         if data.empty:
             raise ValueError("Data is empty. Cannot plot geoboundaries.")
@@ -758,6 +1021,17 @@ class GeoPlot:
             raise ValueError(f"Column '{adm_level}' not found in data.")
 
         data = data.to_crs(config["crs"])
+        dissolved = data.dissolve("iso_code")
+
+        dissolved_zoomed = None
+        if zoom_to is not None:
+            data_temp = []
+            for key, value in zoom_to.items():
+                selected = data[data[key].isin([value])].to_crs(config["crs"])
+                data_temp.append(selected)
+
+            data = gpd.GeoDataFrame(pd.concat(data_temp), geometry="geometry")
+            dissolved_zoomed = data.dissolve("iso_code")
 
         # Initialize figure
         fig, ax = plt.subplots(
@@ -773,7 +1047,8 @@ class GeoPlot:
         xpos = 0
         if group in data.columns and data[group].nunique() < max_groups:
             # cmap = ListedColormap(config["cmap"])
-            cmap = cmaps.tableau_20
+            cmap = get_cmap(config["cmap"])
+
             edgecolor = config["edgecolor_with_group"]
             linewidth = config["linewidth_with_group"]
 
@@ -841,11 +1116,35 @@ class GeoPlot:
             )
 
         # Add dissolved country outline
-        dissolved = data.dissolve("iso_code")
-        dissolved.geometry = dissolved.geometry.apply(data_utils._fill_holes)
-        dissolved.to_crs(config["crs"]).plot(
-            ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none"
-        )
+        if dissolved_zoomed is not None:
+            dissolved_zoomed.plot(
+                ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none"
+            )
+        else:
+            dissolved = data.dissolve("iso_code")
+            dissolved.geometry = dissolved.geometry.apply(
+                data_utils._fill_holes
+            )
+            dissolved.to_crs(config["crs"]).plot(
+                ax=ax, lw=0.5, edgecolor="dimgrey", facecolor="none"
+            )
+
+        country = self.dm.country
+        if zoom_to is not None:
+            subunit = ", ".join([value for value in zoom_to.values()])
+            country = f"{subunit}, {country}"
+            self._plot_tiny_map(
+                zoom_to,
+                country,
+                subunit,
+                data,
+                dissolved,
+                fig,
+                ax,
+                None,
+                config,
+                x=xpos,
+            )
 
         # Get title text
         if title is None:
@@ -883,6 +1182,7 @@ class GeoPlot:
         binning: str = "quantiles",
         nbins: int = 4,
         zoom_to: dict = None,
+        zorder: int = 1,
         kwargs: dict = None,
         key="bivariate_choropleth",
     ) -> matplotlib.axes.Axes:
@@ -955,9 +1255,9 @@ class GeoPlot:
         if zoom_to is not None:
             data = []
             for key, value in zoom_to.items():
-                selected = self.data[self.data[key].isin([value])].to_crs(
-                    config["crs"]
-                )
+                selected = self.dm.data[
+                    self.dm.data[key].isin([value])
+                ].to_crs(config["crs"])
                 data.append(selected)
 
             data = gpd.GeoDataFrame(pd.concat(data), geometry="geometry")
@@ -1001,13 +1301,15 @@ class GeoPlot:
         data_plot["cmap"] = data_plot["bivariate"].map(cmap_dict)
         data_missing = data_plot[data_plot["cmap"].isna()]
         data_plot["cmap"] = data_plot["cmap"].fillna(config["missing_color"])
+        color = data_plot["cmap"]
 
         # Plot main choropleth
         data.to_crs(config["crs"]).plot(
             ax=ax,
-            color=data_plot["cmap"],
+            color=color,
             edgecolor=config["edgecolor"],
             lw=config["linewidth"],
+            zorder=zorder,
         )
         if len(data_missing) > 0:
             ax = self._plot_missing(ax, data_missing, config)
@@ -1169,7 +1471,8 @@ class GeoPlot:
         legend_title: str = None,
         annotation: str = None,
         var_bounds: list = [None, None],
-        nbins: int = 5,
+        nbins: int = 4,
+        zorder: int = 1,
         binning: str = "equal_intervals",
         zoom_to: dict = None,
         kwargs: dict = None,
@@ -1208,10 +1511,10 @@ class GeoPlot:
             data = self.dm.data.copy()
 
         if data.empty:
-            raise ValueError("self.data is empty. Cannot plot choropleth.")
+            raise ValueError("self.dm.data is empty. Cannot plot choropleth.")
         if var not in data.columns:
             raise ValueError(
-                f"Variable '{var}' not found in self.data columns."
+                f"Variable '{var}' not found in self.dm.data columns."
             )
 
         # ISO code for country labeling
@@ -1249,27 +1552,15 @@ class GeoPlot:
         if zoom_to is not None:
             data = []
             for key, value in zoom_to.items():
-                selected = self.data[self.data[key].isin([value])].to_crs(
-                    config["crs"]
-                )
+                selected = self.dm.data[
+                    self.dm.data[key].isin([value])
+                ].to_crs(config["crs"])
                 if selected.empty:
                     raise ValueError(f"{value} is not in {key}.")
                 data.append(selected)
 
             data = gpd.GeoDataFrame(pd.concat(data), geometry="geometry")
             dissolved_zoomed = data.dissolve("iso_code")
-
-        # Setup legend parameters
-        legend_kwds = dict()
-        if config["legend_type"] == "colorbar":
-            legend_kwds = {
-                "shrink": config["legend_shrink"],
-                "location": "left",
-            }
-
-        # Convert relative variables to percentages
-        if "%" in legend_title.lower():
-            data[var] = data[var] * 100
 
         # Determine min/max bounds
         vmin, vmax = var_bounds
@@ -1286,10 +1577,7 @@ class GeoPlot:
         if data[var].nunique() == 1:
             # Transform value and get color
             unique_value = data[var].dropna().unique()[0]
-            cmap_value = (
-                unique_value / 100 if "relative" in var else unique_value
-            )
-            color = cmap(cmap_value) if 0 <= cmap_value <= 1 else cmap(0.5)
+            color = cmap(unique_value) if 0 <= unique_value <= 1 else cmap(0.5)
 
             # Plot single-color map
             data.plot(
@@ -1297,6 +1585,7 @@ class GeoPlot:
                 color=color,
                 edgecolor=config["edgecolor"],
                 linewidth=config["linewidth"],
+                zorder=zorder,
             )
 
             # Add legend showing value
@@ -1368,6 +1657,7 @@ class GeoPlot:
                 color=data["color"],
                 edgecolor=config["edgecolor"],
                 linewidth=config["linewidth"],
+                zorder=zorder,
             )
             # Manually create legend
             patches = [
@@ -1392,12 +1682,15 @@ class GeoPlot:
             xpos = tight_bbox_fig.x0  # left edge for alignment
 
             # 3. Create a dummy iax somewhere else (will not hide legend)
-            # iax = ax.inset_axes(tight_bbox_fig)
             iax = fig.add_axes(tight_bbox_fig)
             iax.set_axis_off()
 
         elif config["legend_type"] == "colorbar":
-            # Plot using a continuous colorbar legend
+            legend_kwds = {
+                "shrink": config["legend_shrink"],
+                "location": "left",
+            }
+            data[var] = data[var].astype(float)
             data.plot(
                 var,
                 ax=ax,
@@ -1408,6 +1701,7 @@ class GeoPlot:
                 legend_kwds=legend_kwds,
                 vmin=vmin,
                 vmax=vmax,
+                zorder=zorder,
             )
 
             # Get colorbar axis and set titles, labels
@@ -1507,6 +1801,7 @@ class GeoPlot:
                 legend_kwds=legend_kwds,
                 vmin=vmin,
                 vmax=vmax,
+                zorder=zorder,
             )
 
             # Draw histogram bars in inset axis
@@ -1733,23 +2028,26 @@ class GeoPlot:
         """
         # Get main axes and legend axes positions (in figure coordinates)
         ax1_pos = ax1.get_position()
-        ax2_pos = ax2.get_position()
 
-        # Align tiny map horizontally with legend labels
-        natural_height = ax1_pos.y1 - ax2_pos.y1
+        iax_height = max_height = (ax1_pos.y1 - ax1_pos.y0) / 3
 
-        # Max allowed height = 1/3 of ax height
-        max_height = (ax1_pos.y1 - ax1_pos.y0) / 3
-
-        # Choose the smaller of the natural height vs. max allowed
-        total_gap = ax1_pos.y1 - ax2_pos.y1
-        iax_height = min(natural_height, max_height)
-
-        # Center tiny map vertically between main map and legend
-        iax_y = ax2_pos.y1 + (total_gap - iax_height) / 2
-
-        # Width (space between legend and ax)
         iax_width = ax1_pos.x0 - x
+
+        iax_y = (ax1_pos.y1 - ax1_pos.y0) * 3 / 4
+
+        if ax2 is not None:
+            ax2_pos = ax2.get_position()
+
+            # Align tiny map horizontally with legend labels
+            natural_height = ax1_pos.y1 - ax2_pos.y1
+
+            # Choose the smaller of the natural height vs. max allowed
+            total_gap = ax1_pos.y1 - ax2_pos.y1
+
+            iax_height = min(natural_height, max_height)
+
+            # Center tiny map vertically between main map and legend
+            iax_y = ax2_pos.y1 + (total_gap - iax_height) / 2
 
         # Create tiny map axes in figure coordinates
         iax = fig.add_axes([x, iax_y, iax_width, iax_height])
@@ -1825,30 +2123,30 @@ class GeoPlot:
         title_y = config.get("title_y", y1)
 
         if subtitle is None:
-            if "idmc" in annotation.lower():
-                start_date = datetime.strptime(
-                    self.dm.displacement_start_date, "%Y-%m-%d"
-                )
-                end_date = datetime.strptime(
-                    self.dm.displacement_end_date, "%Y-%m-%d"
-                )
-                subtitle = f"Displacement events from {start_date.year} to {end_date.year}"
-
-            elif "dtm" in annotation.lower():
+            if "dtm" in annotation.lower():
                 year = self.dm.dtm.yearReportingDate.unique()[0]
                 round_number = self.dm.dtm.roundNumber.unique()[0]
                 subtitle = (
                     f"Displacement events in {year} (Round {round_number})"
                 )
 
-            elif "conflict" in annotation.lower():
-                start_date = datetime.strptime(
-                    self.dm.conflict_start_date, "%Y-%m-%d"
-                )
-                end_date = datetime.strptime(
-                    self.dm.conflict_end_date, "%Y-%m-%d"
-                )
-                subtitle = f"Conflict events from {start_date.year} to {end_date.year}"
+            # if "idmc" in annotation.lower():
+            #    start_date = datetime.strptime(
+            #        self.dm.displacement_start_date, "%Y-%m-%d"
+            #    )
+            #    end_date = datetime.strptime(
+            #        self.dm.displacement_end_date, "%Y-%m-%d"
+            #    )
+            #    subtitle = f"Displacement events from {start_date.year} to {end_date.year}"
+
+            # if "conflict" in annotation.lower():
+            #    start_date = datetime.strptime(
+            #        self.dm.conflict_start_date, "%Y-%m-%d"
+            #    )
+            #    end_date = datetime.strptime(
+            #        self.dm.conflict_end_date, "%Y-%m-%d"
+            #    )
+            #    subtitle = f"Conflict events from {start_date.year} to {end_date.year}"
 
         # Add subtitle (if provided)
         if subtitle is not None:
