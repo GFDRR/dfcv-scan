@@ -13,6 +13,11 @@ from functools import reduce
 from pathlib import Path
 from warnings import simplefilter
 
+import ast
+import pyrosm
+import quackosm as qosm
+from pyrosm.data import sources
+
 # Third-party libraries
 import geojson
 import importlib_resources
@@ -38,6 +43,8 @@ import ahpy
 import bs4
 import osmnx as ox
 from dtmapi import DTMApi
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Local package import
 from dfcv_colocation_mapping import data_utils
@@ -87,7 +94,7 @@ class DatasetManager:
         fathom_year: int = 2020,
         fathom_rp: int = 50,
         jrc_rp: int = 100,
-        mhs_aggregation: str = "power_mean",
+        mhs_aggregation: str = "arithmetic_mean",
         # Global variable names
         acled_name: str = "acled",
         ucdp_name: str = "ucdp",
@@ -332,6 +339,16 @@ class DatasetManager:
 
         logging.info("Downloading OSM...")
         self.osm = self.download_osm()
+        self.osm_networks = (
+            self.process_osm_data(osm_type="networks")
+            if self.osm is not None
+            else None
+        )
+        self.osm_pois = (
+            self.process_osm_data(osm_type="pois")
+            if self.osm is not None
+            else None
+        )
 
     def _combine_datasets(self) -> gpd.GeoDataFrame:
         data = []
@@ -370,7 +387,7 @@ class DatasetManager:
             "exposure_relative",
             "intensity_weighted_exposure_relative",
         ],
-        aggregation: str = "power_mean",
+        aggregation: str = "arithmetic_mean",
         p: float = 0.5,
         epsilon: float = 0.00001,
     ) -> gpd.GeoDataFrame:
@@ -478,7 +495,7 @@ class DatasetManager:
             except Exception as err:
                 logging.info(err)
                 logging.info(
-                    f"Loading geoboundaries failed. Trying again {i+1}/{attempts}"
+                    f"Loading admin boundaries failed. Trying again {i+1}/{attempts}"
                 )
                 pass
 
@@ -509,17 +526,12 @@ class DatasetManager:
         elif overwrite or not os.path.exists(out_file):
             # Download GADM dataset
             if adm_source == "gadm":
-                try:
-                    self.download_url(
-                        adm_source,
-                        dataset_name=f"{adm_source}_{adm_level}",
-                        ext="geojson",
-                    )
-                    geoboundary = gpd.read_file(out_file)
-                except Exception as e:
-                    raise FileNotFoundError(
-                        f"Failed to download or read GADM data: {str(e)}"
-                    )
+                self.download_url(
+                    adm_source,
+                    dataset_name=f"{adm_source}_{adm_level}",
+                    ext="geojson",
+                )
+                geoboundary = gpd.read_file(out_file)
 
                 # Rename columns to standard format
                 rename = dict()
@@ -566,62 +578,45 @@ class DatasetManager:
                             download_path = r.json()["gjDownloadURL"]
                         except Exception:
                             # Fallback to GBOpen URL if GBHumanitarian URL fails
-                            try:
-                                url = (
-                                    f"{gbopen_url}{self.iso_code}/{adm_level}/"
-                                )
-                                r = requests.get(url)
-                                download_path = r.json()["gjDownloadURL"]
-                            except Exception as e:
-                                raise requests.RequestException(
-                                    f"Failed to download {adm_level} boundaries: {str(e)}"
-                                )
+                            url = f"{gbopen_url}{self.iso_code}/{adm_level}/"
+                            r = requests.get(url)
+                            download_path = r.json()["gjDownloadURL"]
 
                         # Download and save the GeoJSON data
-                        try:
-                            geoboundary = requests.get(download_path).json()
-                            with open(intermediate_file, "w") as file:
-                                geojson.dump(geoboundary, file)
-                        except Exception as e:
-                            raise FileNotFoundError(
-                                f"Failed to save GeoJSON file {os.path.basename(intermediate_file)}: {str(e)}"
-                            )
+                        geoboundary = requests.get(download_path).json()
+                        with open(intermediate_file, "w") as file:
+                            geojson.dump(geoboundary, file)
 
-                    try:
-                        # Read the downloaded GeoJSON into a GeoDataFrame
-                        geoboundary = gpd.read_file(intermediate_file)
-                        geoboundary["iso_code"] = self.iso_code
+                    # Read the downloaded GeoJSON into a GeoDataFrame
+                    geoboundary = gpd.read_file(intermediate_file)
+                    geoboundary["iso_code"] = self.iso_code
 
-                        # Select relevant columns and rename them
-                        if (
-                            "shapeName" in geoboundary.columns
-                            and "shapeID" in geoboundary.columns
-                        ):
-                            geoboundary = geoboundary[
-                                [
-                                    "iso_code",
-                                    "shapeName",
-                                    "shapeID",
-                                    "geometry",
-                                ]
-                            ]
-                            geoboundary.columns = [
+                    # Select relevant columns and rename them
+                    if (
+                        "shapeName" in geoboundary.columns
+                        and "shapeID" in geoboundary.columns
+                    ):
+                        geoboundary = geoboundary[
+                            [
                                 "iso_code",
-                                adm_level,
-                                f"{adm_level}_ID",
+                                "shapeName",
+                                "shapeID",
                                 "geometry",
                             ]
+                        ]
+                        geoboundary.columns = [
+                            "iso_code",
+                            adm_level,
+                            f"{adm_level}_ID",
+                            "geometry",
+                        ]
 
-                        # Save geoboundary with renamed columns
-                        datasets.append(geoboundary)
-                        geoboundary.to_file(intermediate_file)
-                        logging.info(
-                            f"Geoboundary file saved to {os.path.basename(intermediate_file)}."
-                        )
-                    except Exception as e:
-                        raise FileNotFoundError(
-                            f"Failed to read GeoJSON file {os.path.basename(intermediate_file)}: {str(e)}"
-                        )
+                    # Save geoboundary with renamed columns
+                    datasets.append(geoboundary)
+                    geoboundary.to_file(intermediate_file)
+                    logging.info(
+                        f"Geoboundary file saved to {os.path.basename(intermediate_file)}."
+                    )
 
                 # Merge multiple levels
                 geoboundary = datasets[-1].to_crs(self.meter_crs)
@@ -666,7 +661,10 @@ class DatasetManager:
             geoboundary.to_crs(self.crs).to_file(out_file)
 
         # Load final geoboundary and update attributes
-        geoboundary = gpd.read_file(out_file).to_crs(self.crs)
+        geoboundary = gpd.read_file(out_file, engine="pyogrio").to_crs(
+            self.crs
+        )
+        logging.info(f"Geoboundary data dimensions: {geoboundary.shape}")
 
         out_file = self._build_filename(
             self.iso_code,
@@ -674,17 +672,16 @@ class DatasetManager:
             self.local_dir,
             ext="geojson",
         )
-        group = None
+        geoboundary, group = self._assign_grouping(
+            self.iso_code, geoboundary, self.adm_config
+        )
         if not overwrite and not os.path.exists(out_file):
-            geoboundary, group = self._assign_grouping(
-                self.iso_code, geoboundary, self.adm_config
-            )
-            geoboundary.to_crs(self.crs).to_file(out_file)
+            geoboundary.to_crs(self.crs).to_file(out_file, engine="pyogrio")
             logging.info(
                 f"Geoboundary file saved to {os.path.basename(out_file)}."
             )
 
-        geoboundary = gpd.read_file(out_file)
+        geoboundary = gpd.read_file(out_file, engine="pyogrio")
 
         if adm_level == self.adm_level:
             self.group = group
@@ -694,42 +691,102 @@ class DatasetManager:
 
         return geoboundary
 
-    def download_osm(self) -> gpd.GeoDataFrame:
-        out_file = self._build_filename(
-            self.iso_code, "OSM", self.local_dir, ext="geojson"
+    def _mask_osm_tags(self, data, osm_tags):
+        def _get_dict_mask(data, tags):
+            masks = []
+            for osm_key, osm_values in tags.items():
+                mask = data["tags"].apply(
+                    lambda x: osm_key in x and x.get(osm_key) in osm_values
+                )
+                masks.append(mask)
+            return masks
+
+        masks = []
+        if isinstance(osm_tags, list):
+            for tag in osm_tags:
+                if isinstance(tag, str):
+                    mask = data["tags"].apply(lambda x: tag in x)
+                    masks.append(mask)
+
+                elif isinstance(tag, dict):
+                    masks.extend(_get_dict_mask(data, tag))
+
+        elif isinstance(osm_tags, dict):
+            masks.extend(_get_dict_mask(data, osm_tags))
+
+        if masks:
+            combined_mask = np.logical_or.reduce(masks)
+            subdata = data[combined_mask]
+        else:
+            subdata = data.copy()
+
+        return subdata
+
+    def process_osm_data(self, osm_type: str):
+        if osm_type == "networks":
+            data_types = ["LineString", "MultiLineString"]
+        elif osm_type == "pois":
+            data_types = ["Point", "MultiPoint"]
+
+        data = self.osm[self.osm.geom_type.isin(data_types)]
+        config = self.osm_config[f"osm_{osm_type}"]
+
+        osm_data = dict()
+        for data_type in tqdm(config, total=len(config)):
+            osm_subdata_file = self._build_filename(
+                self.iso_code, f"OSM_{data_type}", self.local_dir, ext="gpkg"
+            )
+
+            if self.overwrite or not os.path.exists(osm_subdata_file):
+                osm_tags = config[data_type]
+                subdata = self._mask_osm_tags(data, osm_tags)
+                subdata.to_file(osm_subdata_file)
+
+            subdata = gpd.read_file(osm_subdata_file)
+            subdata["tag"] = data_type
+            subdata = subdata.to_crs(self.geoboundary.crs).sjoin(
+                self.geoboundary, how="left"
+            )
+            osm_data[data_type] = subdata
+
+        return osm_data
+
+    def download_osm(self, country: str = None, out_dir: str = None):
+        country = self.country if country is None else country
+        out_dir = self.local_dir if out_dir is None else out_dir
+
+        osm_countries = []
+        for key in sources.available.keys():
+            osm_countries.extend(sources.available[key])
+        osm_countries = [osm_country.lower() for osm_country in osm_countries]
+
+        self.osm_countries = osm_countries
+        if country not in osm_countries:
+            found = False
+            for osm_country in osm_countries:
+                if country.lower() in osm_country:
+                    found = True
+                    country = osm_country
+                    break
+            if not found:
+                logging.info(
+                    f"{WARNING}WARNING: OSM does not exist for {self.country}.{RESET}"
+                )
+                return
+
+        osm_file = self._build_filename(
+            self.iso_code, "OSM", self.local_dir, ext="gpkg"
         )
+        if self.overwrite or not os.path.exists(osm_file):
+            filename = pyrosm.get_data(country, directory=out_dir)
+            osm = pyrosm.OSM(filename)
 
-        if os.path.exists(out_file):
-            return gpd.read_file(out_file)
+            osm = qosm.convert_pbf_to_geodataframe(filename)
+            osm.to_file(osm_file)
 
-        osm = []
-        ox.settings.log_console = True
+        osm = gpd.read_file(osm_file)
+        osm["tags"] = osm["tags"].apply(lambda x: ast.literal_eval(x))
 
-        categories = self.osm_config["keywords"]
-        for category in (
-            pbar := tqdm(categories, total=len(categories), dynamic_ncols=True)
-        ):
-            pbar.set_description(f"Processing {category}")
-            tags = categories[category]
-            admin_bounds = self.geoboundary.dissolve("iso_code")[
-                "geometry"
-            ].envelope.values[0]
-            data = ox.features.features_from_polygon(
-                admin_bounds, tags
-            ).to_crs(self.meter_crs)
-            data.geometry = data.geometry.centroid
-            data = data.to_crs(self.crs)
-
-            data["category"] = category.replace("_", " ").title()
-            osm.append(data[["geometry", "amenity", "category"]])
-
-        osm = gpd.GeoDataFrame(pd.concat(osm)).reset_index().to_crs(self.crs)
-        osm = osm.rename(
-            columns={"category": "osm_category", "amenity": "osm_amenity"}
-        )
-        osm = osm.sjoin(self.geoboundary, how="left", predicate="intersects")
-        osm = osm.drop(["index_right"], axis=1)
-        osm.to_file(out_file, driver="GeoJSON")
         return osm
 
     def download_idmc_gidd(
@@ -897,9 +954,22 @@ class DatasetManager:
             self.local_dir,
             ext="csv",
         )
+        geojson_file = self._build_filename(
+            self.iso_code,
+            f"DTM_{dtm_adm_level}",
+            self.local_dir,
+            ext="geojson",
+        )
+
+        data = None
+        if os.path.exists(filtered_file):
+            if not aggregate:
+                data = pd.read_csv(filtered_file)
+            elif os.path.exists(geojson_file):
+                data = gpd.read_file(geojson_file)
 
         if self.dtm_key is None:
-            return
+            return data
         else:
             try:
                 api = DTMApi(subscription_key=self.dtm_key)
@@ -908,10 +978,7 @@ class DatasetManager:
                 logging.info(
                     f"{WARNING}WARNING: Network connection to dtm.iom.int could not be established.{RESET}"
                 )
-                logging.info(
-                    f"{WARNING}WARNING: DTM data failed to download.{RESET}"
-                )
-                return
+                return data
 
         if (
             self.overwrite
@@ -985,13 +1052,6 @@ class DatasetManager:
             dtm = pd.read_csv(filtered_file)
 
         if aggregate:
-            geojson_file = self._build_filename(
-                self.iso_code,
-                f"DTM_{dtm_adm_level}",
-                self.local_dir,
-                ext="geojson",
-            )
-
             dtm_adm_level_num = dtm_adm_level[-1]
             column = f"admin{dtm_adm_level_num}Name"
             dtm_agg = self._aggregate_data(
@@ -1291,7 +1351,7 @@ class DatasetManager:
                 ext="geojson",
             )
             acled = self._filter_acled(
-                self.acled_raw, self.acled_hierarchy, filtered_file
+                self.acled_raw, self.acled_selected[asset_name], filtered_file
             )
 
             if aggregate:
@@ -1487,20 +1547,16 @@ class DatasetManager:
 
         # Rasterize if raster does not exist
         if self.overwrite or not os.path.exists(out_file):
-            try:
-                # Create empty raster based on asset template
-                with rio.open(asset_file) as src:
-                    out_image = src.read(1)
-                    out_image = np.zeros(out_image.shape)
+            # Create empty raster based on asset template
+            with rio.open(asset_file) as src:
+                out_image = src.read(1)
+                out_image = np.zeros(out_image.shape)
 
-                    out_meta = src.meta.copy()
-                    with rio.open(out_file, "w", **out_meta) as dest:
-                        dest.write(out_image, 1)
+                out_meta = src.meta.copy()
+                with rio.open(out_file, "w", **out_meta) as dest:
+                    dest.write(out_image, 1)
 
-                os.system(f"gdal_rasterize -at -burn 1 {temp_file} {out_file}")
-
-            except Exception as e:
-                raise RuntimeError(f"Error creating exposure raster: {e}")
+            os.system(f"gdal_rasterize -at -burn 1 {temp_file} {out_file}")
 
         return out_file
 
@@ -1747,22 +1803,23 @@ class DatasetManager:
             shutil.copyfile(os.path.join(zip_dir, csv_files[0]), out_file)
 
     def download_fathom(self, name: str, ext: str = "tif") -> str:
-        fathom_dir = os.path.join(self.local_dir, self.fathom_name)
+        fathom_dir = os.path.join(self.local_dir, self.fathom_name.lower())
 
         # If processed dataset doesn't exist, generate it
-        name = f"{self.iso_code}_{name}_rp{self.fathom_rp}".upper()
-        raw_file = os.path.join(fathom_dir, f"{name}.{ext}")
-        local_file = os.path.join(self.local_dir, f"{name}.{ext}")
+        raw_file = os.path.join(fathom_dir, f"{name.upper()}.{ext}")
+        local_file = os.path.join(
+            self.local_dir, f"{self.iso_code.upper()}_{name.upper()}.{ext}"
+        )
 
         # If processed file doesn't exist, build from VRT
         if self.overwrite or not os.path.exists(local_file):
             flood_dir = os.path.join(
                 fathom_dir,
-                name.replace("_" + self.fathom_name, "").upper(),
+                name.replace("_" + self.fathom_name.lower(), "").upper(),
                 str(self.fathom_year),
                 f"1in{self.fathom_rp}",
             )
-            merged_file = os.path.join(fathom_dir, f"{name}.vrt")
+            merged_file = os.path.join(fathom_dir, f"{name.upper()}.vrt")
             self._merge_tifs(f"{flood_dir}/*.{ext}", merged_file, raw_file)
 
             # Clip raster to admin boundary
