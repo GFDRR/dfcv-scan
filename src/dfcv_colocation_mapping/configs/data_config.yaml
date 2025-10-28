@@ -5,14 +5,18 @@ asset_data:
     - 'global_bem'
 
 hazard_data: 
+    - 'coastal_defended_fathom'
+    - 'pluvial_defended_fathom'
+    - 'fluvial_defended_fathom'
     - 'global_earthquake'
     - 'global_landslide_earthquake_gfdrr'
     - 'global_landslide_precip_gfdrr'
     - 'global_cyclone'
     - 'global_drought_spei'
     - 'global_heat_stress'
-    - 'global_fluvial_flood_cdri'
     - 'global_wildfire'
+    #- 'global_fluvial_flood_cdri'
+    
     
 
 hazards: # https://doc.emdat.be/docs/data-structure-and-content/glossary/

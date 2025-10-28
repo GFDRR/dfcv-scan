@@ -1,33 +1,48 @@
-keywords: {
-    healthcare: {
-      amenity: [
-          "clinic",
-          "hospital",
-          "doctors",
-          "pharmacy",
-          "social_facility"
-      ]
-  },
-  financial: {
-      amenity: [
-          "bureau_de_change",
-          "atm",
-      ]
-  },
-  facilities: {
-      amenity: [
-          "drinking_water",
-          "shelter",
-          "shower",
-          "toilets",
-          "water_point",
-          "watering_place"
-      ]
-  },
-  public_service: {
-      amenity: [
-            "fire_station",
-            "police"
-        ]      
-  }
-}
+osm_networks:
+    roads:
+        highway:
+            - primary
+            - secondary
+            - tertiary
+            - primary_link
+            - secondary_link
+            - tertiary_link
+    waterways:
+        waterway:
+            - river
+            - canal
+            - fairway
+    railways:
+        - railway
+
+osm_pois: 
+    healthcare:
+        - healthcare
+        - amenity:
+            - clinic
+            - hospital
+            - doctors
+    airports:
+        - aeroway:
+            - terminal
+            - gate
+    markets:
+        - shop:
+            - supermarket
+        - amenity:
+            - marketplace
+    public_service:
+        - amenity:
+            - townhall
+            - police
+            - fire_station
+    financial_service:
+        - amenity:
+            - atm
+            - payment_terminal
+            - bank
+            - bureau_de_change
+            - money_transfer
+            - payment_centre
+        
+    

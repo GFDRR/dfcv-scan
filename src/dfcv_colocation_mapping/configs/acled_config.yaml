@@ -1,10 +1,10 @@
 acled_selected:
     worldcover_cropland: 
-        "Battles":
-            - "Government regains territory"
-            - "Non-state actor overtakes territory"
-            - "Armed clash"
         "Political violence":
+            "Battles":
+                - "Government regains territory"
+                - "Non-state actor overtakes territory"
+                - "Armed clash"
             "Explosions/Remote violence":
                 - "Chemical weapon"
                 - "Air/drone strike"

@@ -5,7 +5,7 @@ choropleth:
     crs: "EPSG:3857"
 
     linewidth: 0.4
-    edgecolor: "lightgrey"
+    edgecolor: "gainsboro"
     font_type: "Roboto"
 
     title: "{} in {}"
@@ -35,7 +35,7 @@ choropleth:
     barplot_label_size: 5
     
     missing_color: "silver"
-    missing_edgecolor: "dimgray"
+    missing_edgecolor: "gainsboro"
     missing_linewidth: 0.2
     missing_hatch: "///"
     missing_label: "No data"
@@ -49,7 +49,7 @@ choropleth:
 
     fontsize: 5
     label_facecolor: 'white'
-    label_edgecolor: 'dimgray'
+    label_edgecolor: 'gainsboro'
     label_linewidth: 0.3
     label_alpha: 0.7
     label_boxstyle: 'round,pad=0.5'
@@ -61,8 +61,8 @@ bivariate_choropleth:
     dpi: 300
     crs: "EPSG:3857"
 
-    linewidth: 0.4
-    edgecolor: "lightgrey"
+    linewidth: 0.2
+    edgecolor: "gainsboro"
     font_type: "Roboto"
 
     title: "{} and {} in {}"
@@ -75,7 +75,7 @@ bivariate_choropleth:
     legend_fontsize: 5
     
     missing_color: "silver"
-    missing_edgecolor: "dimgray"
+    missing_edgecolor: "gainsboro"
     missing_linewidth: 0.2
     missing_hatch: "///"
     missing_label: "No data"
@@ -85,7 +85,7 @@ bivariate_choropleth:
 
     fontsize: 5
     label_facecolor: 'white'
-    label_edgecolor: 'dimgray'
+    label_edgecolor: 'gainsboro'
     label_linewidth: 0.3
     label_alpha: 0.7
     label_boxstyle: 'round,pad=0.5'
@@ -131,13 +131,13 @@ geoboundaries:
     annotation_color: "#909090"
 
     edgecolor_with_group: "white"
-    edgecolor_no_group: "dimgray"
+    edgecolor_no_group: "gainsboro"
     linewidth_with_group: 0.2
     linewidth_no_group: 0.4
 
     fontsize: 5
     label_facecolor: 'white'
-    label_edgecolor: 'dimgray'
+    label_edgecolor: 'gainsboro'
     label_linewidth: 0.3
     label_alpha: 0.7
     label_boxstyle: 'round,pad=0.5'
@@ -152,10 +152,7 @@ geoboundaries:
     group_legend_y: 0.7
     group_legend_width: 0.2
     group_legend_height: 0.2
-
-    cmap: [
-        '#005f73', '#0a9396', '#e9d8a6', "#ee9b00", "#ca6702", '#ae2012'
-    ]
+    cmap: "tableau_20"
     
 
 raster:
@@ -189,6 +186,29 @@ raster:
     cbar_pad: 0.04
     cbar_fontsize: 7
 
+hatches:
+    crs: "EPSG:3857"
+    hatches: ["//////", "++++++", "||||||", "------", r"\\\\\\"]
+    legend_title_fontsize: 7
+    legend_label_fontsize: 7
+    linewidth: 0.5
+
+lines:
+    figsize_x: 10
+    figsize_y: 10
+    dpi: 300
+    crs: "EPSG:3857"
+
+    legend_title_fontsize: 7
+    legend_label_fontsize: 7
+    edgecolor: "gainsboro"
+    linewidth: 0.7
+    alpha: 0.9
+
+    markerscale: 10
+    labelspacing: 1.5
+    cmap: "set2"
+    tolerance: 100
 
 points:
     figsize_x: 10
@@ -196,18 +216,16 @@ points:
     dpi: 300
     crs: "EPSG:3857"
 
-    legend_y: 0.5
     legend_title_fontsize: 7
     legend_label_fontsize: 7
-    edgecolor: "dimgray"
+    edgecolor: "gainsboro"
     linewidth: 0.2
     alpha: 0.7
 
-    markerscale: 20
+    markerscale: 3
+    marker: 'o'
     labelspacing: 1.5
-    cmap: "tab10"
-
-
+    cmap: "bold"
 
 folium:
     tiles: 'cartodbpositron'
@@ -238,11 +256,16 @@ asset_alias:
     worldpop: "Population"
 
 hazard_alias:
+    drought_spei: "Drought"
+    coastal_defended_fathom: "Coastal Flood"
+    fluvial_defended_fathom: "Fluvial Flood"
+    pluvial_defended_fathom: "Pluvial Flood"
     landslide_earthquake_gfdrr: "Earthquake-triggered Landslide"
     landslide_precip_gfdrr: "Precipitation-triggered Landslide"
     fluvial_flood_cdri: "Fluvial Flood"
 
 legend_titles:
+    tag: "Infrastructure"
     disaster_idp_total: "Number of IDPs \nfrom Disasters"
     conflict_idp_total: "Number of IDPs \nfrom Conflicts"
     idp_total: "Number of IDPs"
@@ -253,7 +276,7 @@ legend_titles:
     intensity_weighted_exposure_relative: "Intensity-weighted Relative \n{} Exposure Score"
     intensity_weighted_exposure: "Intensity-weighted \n{} Exposure Score"
     mhs: "{} \n{} Exposure Score"
-    exposure_relative: "Proportion of {}  \nexposed to {} (%)"
+    exposure_relative: "Proportion of {}  \nexposed to {}"
     exposure: "{} exposed \nto {}"
     landslide_earthquake: "Susceptibility to \nEarthquake-triggered Landslide"
     landslide_precip: "Mean Average Annual Frequency \nof Precipitation-triggered Landslide"
@@ -282,6 +305,9 @@ var_titles:
 
     
 annotations:
+    coastal_defended_fathom: "Coastal Flood Hazard Map (Fathom v3.0, 2020)"
+    fluvial_defended_fathom: "Fluvial Flood Hazard Map (Fathom v3.0, 2020)"
+    pluvial_defended_fathom: "Pluvial Flood Hazard Map (Fathom v3.0, 2020)"
     idmc: "IDP Data from Internal Displacement Monitoring Centre (IDMC)"
     dtm: "IDP Data from IOM DTM"
     worldcover: "ESA WorldCover 10 m 2021 v200 (Zanaga, et al., 2022)"
