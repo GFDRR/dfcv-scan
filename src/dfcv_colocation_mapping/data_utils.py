@@ -146,6 +146,10 @@ def _humanize(value, number=None) -> str:
 
     # Small numbers (<10)
     if value < 1:
+        if value < 0.1:
+            if value < 0.01:
+                return f"{value:.4f}"
+            return f"{value:.3f}"
         return f"{value:.2f}"  # e.g., 0.12
     elif value.is_integer():
         return f"{int(value)}"  # e.g., 5
