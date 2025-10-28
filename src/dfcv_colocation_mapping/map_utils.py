@@ -49,18 +49,6 @@ WARNING = "\033[31m"
 RESET = "\033[0m"
 
 
-def get_cmap(cmap):
-    if cmap == "bold":
-        cmap = cmaps.bold
-    elif cmap == "set2":
-        cmap = cmaps.set2
-    elif cmap == "tableau_20":
-        cmap = cmaps.tableau_20
-    elif cmap == "trafficlight_9":
-        cmap = cmaps.trafficlight_9
-    return cmap
-
-
 class GeoPlot:
     def __init__(
         self, dm, data_dir: str = "data/", map_config_file: str = None
@@ -329,7 +317,7 @@ class GeoPlot:
                     src.bounds.bottom,
                     src.bounds.top,
                 ],
-                cmap=get_cmap(config["cmap"]),
+                cmap=getattr(cmaps, config["cmap"]),
                 origin="upper",
             )
 
@@ -483,7 +471,7 @@ class GeoPlot:
 
         # Unique categories
         categories = networks[column].unique()
-        cmap = get_cmap(config["cmap"])
+        cmap = getattr(cmaps, config["cmap"])
         colors = {cat: cmap(i) for i, cat in enumerate(categories)}
 
         # Plot each category manually (so colors match handles)
@@ -589,7 +577,7 @@ class GeoPlot:
         data["lat"] = data.geometry.y
 
         categories = sorted(data[column].unique())
-        cmap = get_cmap(config["cmap"])
+        cmap = getattr(cmaps, config["cmap"])
         colors = [matplotlib.colors.rgb2hex(c) for c in cmap.colors][
             : len(categories)
         ]
@@ -1046,9 +1034,7 @@ class GeoPlot:
 
         xpos = 0
         if group in data.columns and data[group].nunique() < max_groups:
-            # cmap = ListedColormap(config["cmap"])
-            cmap = get_cmap(config["cmap"])
-
+            cmap = getattr(cmaps, config["cmap"])
             edgecolor = config["edgecolor_with_group"]
             linewidth = config["linewidth_with_group"]
 
