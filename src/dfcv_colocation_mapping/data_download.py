@@ -764,7 +764,8 @@ class DatasetManager:
         if country not in osm_countries:
             found = False
             for osm_country in osm_countries:
-                if country.lower() in osm_country:
+                country_name = country.lower().replace(" ", "_")
+                if country_name in osm_country:
                     found = True
                     country = osm_country
                     break
