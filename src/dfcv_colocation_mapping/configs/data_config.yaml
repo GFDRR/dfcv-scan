@@ -1,61 +1,97 @@
-asset_data:
+conflict_selected:
+    - 'acled'
+
+displacement_selected:
+    - 'iom_dtm'
+    - 'idmc_gidd'
+    - 'unhcr'
+
+assets_selected:
     - 'worldpop'
-    - 'worldcover_builtup'
-    - 'worldcover_cropland'
     - 'global_bem'
 
-hazard_data: 
+hazards_selected: 
     - 'global_earthquake'
     - 'global_landslide_earthquake_gfdrr'
     - 'global_landslide_precip_gfdrr'
     - 'global_cyclone'
     - 'global_drought_spei'
     - 'global_heat_stress'
-    - 'global_wildfire'
+    - 'global_wildfire_geos5'
     - 'global_fluvial_flood_cdri'
-    #- 'coastal_defended_fathom'
-    #- 'pluvial_defended_fathom'
-    #- 'fluvial_defended_fathom'
     
-    
+assets_all:
+    - 'worldpop'
+    - 'worldcover_builtup'
+    - 'worldcover_cropland'
+    - 'global_bem'
 
-hazards: # https://doc.emdat.be/docs/data-structure-and-content/glossary/
+conflict_all:
+    - 'acled'
+    - 'ucdp'
+
+displacement_all:
+    - 'iom_dtm'
+    - 'idmc_gidd'
+    - 'unhcr'
+
+hazards_all: # https://doc.emdat.be/docs/data-structure-and-content/glossary/
     hydrological:
-        fluvial_flood_cdri: 1
-        fluvial_flood_jrc1: 1
-        fluvial_flood_jrc2: 1
-        landslide_precip_gfdrr: 1
-        landslide_precip_cdri: 1
-        fluvial_defended_fathom: 1
-        pluvial_defended_fathom: 1
-        coastal_defended_fathom: 1
+        - 'global_fluvial_flood_cdri'
+        - 'global_fluvial_flood_jrc1'
+        - 'global_fluvial_flood_jrc2'
+        - 'fluvial_defended_fathom'
+        - 'pluvial_defended_fathom'
+        - 'coastal_defended_fathom'
+        - 'global_landslide_precip_gfdrr'
+        - 'global_landslide_precip_cdri'
     meteorological:
-        cyclone: 1
-        heat_stress: 1
+        - 'global_cyclone'
+        - 'global_heat_stress'
     geophysical:
-        landslide_earthquake_gfdrr: 1
-        landslide_earthquake_cdri: 1
-        earthquake: 1
+        - 'global_landslide_earthquake_gfdrr'
+        - 'global_landslide_earthquake_cdri'
+        - 'global_earthquake'
     climatological:
-        drought_spei: 1
-        wildfire: 1
-    
+        - 'global_drought_spei'
+        - 'global_wildfire_geos5'
+        - 'global_wildfire_gwis'
+        - 'global_wildfire_gabam'
+
+assets_alias:
+    worldcover_builtup: "Built-up Area (Worldcover)"
+    worldcover_cropland: "Cropland Area (Worldcover)"
+    bem: "Building Valuation (Building Exposure Model)"
+    worldpop: "Population (Worldpop)"
+
+hazards_alias:
+    drought_spei: "Drought (SPEI)"
+    coastal_defended_fathom: "Coastal Flood (Fathom)"
+    fluvial_defended_fathom: "Fluvial Flood (Fathom)"
+    pluvial_defended_fathom: "Pluvial Flood (Fathom)"
+    landslide_earthquake_gfdrr: "Earthquake-triggered Landslide (GFDRR)"
+    landslide_precip_gfdrr: "Precipitation-triggered Landslide (GFDRR)"
+    fluvial_flood_cdri: "Fluvial Flood (CDRI)"
+    wildfire_geos5: "Wildfire (CDRI)"
+
 threshold:
-    global_earthquake: 0.18 # https://dc.engconfintl.org/cgi/viewcontent.cgi?article=1015&context=geohazards
-    global_landslide_earthquake_gfdrr: 0.001 # https://datacatalog.worldbank.org/search/dataset/0037584
-    global_landslide_precip_gfdrr: 0.001  # https://datacatalog.worldbank.org/search/dataset/0037584
-    global_landslide_earthquake_cdri: 3 #https://giri.unepgrid.ch/map?list=explore&view=MX-A9CT6-A1M7X-4VY3L
-    global_landslide_precip_cdri: 3 #https://giri.unepgrid.ch/map?list=explore&view=MX-A9CT6-A1M7X-4VY3L
-    global_cyclone: 119 # https://www.noaa.gov/jetstream/tropical/tropical-cyclone-introduction/tropical-cyclone-classification
-    global_drought_spei: -1 # https://essd.copernicus.org/articles/13/331/2021/
-    global_wildfire: 11.2 # https://gwis.jrc.ec.europa.eu/about-gwis/technical-background/fire-danger-forecast
-    global_heat_stress: 32 # https://www.weather.gov/ffc/hichart
-    global_fluvial_flood_jrc1: 30 
-    global_fluvial_flood_jrc2: 30 
-    global_fluvial_flood_cdri: 30 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
-    coastal_defended_fathom: 30 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
-    pluvial_defended_fathom: 30 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
-    fluvial_defended_fathom: 30 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
+    earthquake: 0.18 # https://dc.engconfintl.org/cgi/viewcontent.cgi?article=1015&context=geohazards
+    landslide_earthquake_gfdrr: 0.001 # https://datacatalog.worldbank.org/search/dataset/0037584
+    landslide_precip_gfdrr: 0.001  # https://datacatalog.worldbank.org/search/dataset/0037584
+    landslide_earthquake_cdri: 3 #https://giri.unepgrid.ch/map?list=explore&view=MX-A9CT6-A1M7X-4VY3L
+    landslide_precip_cdri: 3 #https://giri.unepgrid.ch/map?list=explore&view=MX-A9CT6-A1M7X-4VY3L
+    cyclone: 119 # https://www.noaa.gov/jetstream/tropical/tropical-cyclone-introduction/tropical-cyclone-classification
+    drought_spei: -1 # https://essd.copernicus.org/articles/13/331/2021/
+    wildfire_gwis: 11.2 # https://gwis.jrc.ec.europa.eu/about-gwis/technical-background/fire-danger-forecast
+    wildfire_geos5: 11.2
+    wildfire_gabam: 1 # https://zenodo.org/records/13858799
+    heat_stress: 32 # https://www.weather.gov/ffc/hichart, https://www.noaa.gov/jetstream/synoptic/heat-index
+    fluvial_flood_jrc1: 40 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
+    fluvial_flood_jrc2: 40 #https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
+    fluvial_flood_cdri: 40 # https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
+    coastal_defended_fathom: 40 # https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
+    pluvial_defended_fathom: 40 # https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
+    fluvial_defended_fathom: 40 # https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
 
 nodata: 
     fluvial_defended_fathom: [-32768, -32767]
@@ -88,6 +124,7 @@ urls:
     gbhumanitarian_url: "https://www.geoboundaries.org/api/current/gbHumanitarian/"
     # Source: https://www.geoboundaries.org/
     gbopen_url: "https://www.geoboundaries.org/api/current/gbOpen/"
+    unhcr_url: "https://gis.unhcr.org/arcgis/rest/services/core_v2/wrl_prp_p_unhcr_ALL/FeatureServer/0/query"
     # Source: https://hub.worldpop.org/geodata/listing?id=69
     worldpop_url: "https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/{}/{}_ppp_2020_UNadj.tif"
     # Source: https://esa-worldcover.org/en/data-access, https://landcarbonlab.org/insights/global-land-cover-maps-accuracy-applications/
@@ -119,8 +156,11 @@ urls:
     # Source: https://giri.unepgrid.ch/map?view=MX-6FLW2-W3L51-SNGTU
     global_fluvial_flood_cdri_url: "https://hazards-data.unepgrid.ch/global_pc_h10glob.tif"
     # Source: https://data.jrc.ec.europa.eu/dataset/jrc-floods-floodmapgl_rp100y-tif
-    global_fluvial_flood_jrc1_url: "https://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/FLOODS/GlobalMaps/floodMapGL_rp100y.zip"
+    global_fluvial_flood_jrc_url: "https://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/FLOODS/GlobalMaps/floodMapGL_rp100y.zip"
     # Source: https://data.jrc.ec.europa.eu/dataset/jrc-floods-floodmapgl_rp50y-tif
-    global_fluvial_flood_jrc2_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/RP{}/"
+    global_fluvial_flood_jrc_glofas_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/RP{}/"
+    global_wildfire_geos5_url: "https://portal.nccs.nasa.gov/datashare/GlobalFWI/v2.0/fwiCalcs.GEOS-5/Default/GEOS-5/2024/FWI.GEOS-5.Monthly.Default.2024{}.nc"
+    # Source: https://zenodo.org/records/13858799
+    global_wildfire_gabam_url: "https://zenodo.org/records/13858799/files/2021.zip"
     # Source: https://gwis.jrc.ec.europa.eu/applications/data-and-services
-    global_wildfire_url: "https://maps.effis.emergency.copernicus.eu/gwis?LAYERS=ecmwf.fwi&FORMAT=image/tiff&TRANSPARENT=true&SINGLETILE=false&SERVICE=wms&VERSION=1.1.1&REQUEST=GetMap&STYLES=&SRS=EPSG:4326&BBOX=-180.0,-90.0,180.0,90.0&WIDTH=5120&HEIGHT=2560&TIME={}.tiff"
+    global_wildfire_gwis_url: "https://maps.effis.emergency.copernicus.eu/gwis?LAYERS=ecmwf.fwi&FORMAT=image/tiff&TRANSPARENT=true&SINGLETILE=false&SERVICE=wms&VERSION=1.1.1&REQUEST=GetMap&STYLES=&SRS=EPSG:4326&BBOX=-180.0,-90.0,180.0,90.0&WIDTH=5120&HEIGHT=2560&TIME={}.tiff"

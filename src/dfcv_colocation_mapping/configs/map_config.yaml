@@ -4,15 +4,15 @@ choropleth:
     dpi: 300
     crs: "EPSG:3857"
 
-    linewidth: 0.4
-    edgecolor: "gainsboro"
+    linewidth: 0.5
+    edgecolor: "gainsboro" 
     font_type: "Roboto"
 
     title: "{} in {}"
     title_fontsize: 15
     subtitle_fontsize: 10
     subtitle_gap: 0.005
-    annotation_fontsize: 7
+    annotation_fontsize: 8
     annotation_gap: 0.01
     annotation_color: "#909090"
     
@@ -36,17 +36,14 @@ choropleth:
     
     missing_color: "silver"
     missing_edgecolor: "gainsboro"
-    missing_linewidth: 0.2
-    missing_hatch: "///"
+    missing_linewidth: 0.3
+    missing_hatch: "/////"
     missing_label: "No data"
     missing_legend_fontsize: "small"
     missing_legend_loc: "lower right"
-    missing_hatch_linewidth: 0.1
+    missing_hatch_linewidth: 0.2
     
-    cmap: "YlGnBu"
-    create_cmap: False
-    cmap_type: "continuous"
-
+    cmap: "ylgnbu"
     fontsize: 5
     label_facecolor: 'white'
     label_edgecolor: 'gainsboro'
@@ -62,7 +59,7 @@ bivariate_choropleth:
     crs: "EPSG:3857"
 
     linewidth: 0.2
-    edgecolor: "gainsboro"
+    edgecolor: "white"
     font_type: "Roboto"
 
     title: "{} and {} in {}"
@@ -76,12 +73,12 @@ bivariate_choropleth:
     
     missing_color: "silver"
     missing_edgecolor: "gainsboro"
-    missing_linewidth: 0.2
-    missing_hatch: "///"
+    missing_linewidth: 0.3
+    missing_hatch: "/////"
     missing_label: "No data"
     missing_legend_fontsize: "small"
     missing_legend_loc: "lower right"
-    missing_hatch_linewidth: 0.1
+    missing_hatch_linewidth: 0.2
 
     fontsize: 5
     label_facecolor: 'white'
@@ -174,7 +171,7 @@ raster:
     legend_label_fontsize: 7
     
     title: "{} in {}"
-    cmap: "YlGnBu"
+    cmap: "haline_r"
 
     cbar_width: "3%"
     cbar_height: "50%"
@@ -227,6 +224,13 @@ points:
     labelspacing: 1.5
     cmap: "bold"
 
+    fontsize: 5
+    label_facecolor: 'white'
+    label_edgecolor: 'gainsboro'
+    label_linewidth: 0.3
+    label_alpha: 0.3
+    label_boxstyle: 'round,pad=0.5'
+
 folium:
     tiles: 'cartodbpositron'
     zoom_start: 6
@@ -248,28 +252,13 @@ folium:
         fillOpacity: 0.50, 
         weight: 0.1
 
-
-asset_alias:
-    worldcover_builtup: "Built-up Area"
-    worldcover_cropland: "Cropland Area"
-    bem: "Building Valuation"
-    worldpop: "Population"
-
-hazard_alias:
-    drought_spei: "Drought"
-    coastal_defended_fathom: "Coastal Flood"
-    fluvial_defended_fathom: "Fluvial Flood"
-    pluvial_defended_fathom: "Pluvial Flood"
-    landslide_earthquake_gfdrr: "Earthquake-triggered Landslide"
-    landslide_precip_gfdrr: "Precipitation-triggered Landslide"
-    fluvial_flood_cdri: "Fluvial Flood"
-
 legend_titles:
     tag: "Infrastructure"
     disaster_idp_total: "Number of IDPs \nfrom Disasters"
     conflict_idp_total: "Number of IDPs \nfrom Conflicts"
     idp_total: "Number of IDPs"
     osm_category: "OSM Category"
+    total_conflict_count: "Number of conflict events"
     conflict_count: "Number of conflict events \naffecting {}"
     fatalities_per_conflict: "Number of fatalities per conflict"
     fatalities: "Number of fatalities"
@@ -292,6 +281,8 @@ var_titles:
     disaster_idp_total: "Number of IDPs from Disasters"
     conflict_idp_total: "Number of IDPs from Conflicts"
     idp_total: "Number of IDPs"
+    total_conflict_count: "Number of Conflict Events"
+    total_fatalities_per_conflict: "Fatalities per Conflict"
     conflict_count: "Number of Conflict Events Affecting {}"
     fatalities_per_conflict: "Fatalities per Conflict Affecting {}"
     fatalities: "Number of Fatalities"
@@ -308,8 +299,8 @@ annotations:
     coastal_defended_fathom: "Coastal Flood Hazard Map (Fathom v3.0, 2020)"
     fluvial_defended_fathom: "Fluvial Flood Hazard Map (Fathom v3.0, 2020)"
     pluvial_defended_fathom: "Pluvial Flood Hazard Map (Fathom v3.0, 2020)"
-    idmc: "IDP Data from Internal Displacement Monitoring Centre (IDMC)"
-    dtm: "IDP Data from IOM DTM"
+    idmc: "IDP data from IDMC Global Internal Displacement Database (GIDD)"
+    dtm: "IDP data from IOM Displacement Tracking Matrix (DTM)"
     worldcover: "ESA WorldCover 10 m 2021 v200 (Zanaga, et al., 2022)"
     bem: "The GIRI Global Building Exposure Model (BEM) (Pillar et al., 2023)"
     geoboundary: "Administrative boundaries from geoBoundaries (Runfola, D. et al., 2020)"
@@ -322,7 +313,8 @@ annotations:
     drought: "SPEI Drought Indices from Drought.gov and CSIC (Vicente-Serrano, et al., 2010)"
     fluvial_flood: "Global Flood Hazard Continuum model (Silvestro et al. 2013 and 2015)"
     heat_stress: "GloUTCI-M: A Global Monthly 1 km Universal Thermal Climate Index Dataset (2022) (Yang et al., 2023)"
-    wildfire: "Fire Weather Index (FWI) (Di Giuseppe, et al., 2023)"
+    wildfire_geos5: "Global Fire Weather Database (GFWED) NASA GEOS-5 Fire Weather index (FWI) (Field et al., 2015)"
+    wildfire_gwis: "Fire Weather Index (FWI) (Di Giuseppe, et al., 2023)"
     worldpop: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
     acled: "Conflict data from Armed Conflict Location & Event Data Project (ACLED)"
     ucdp: "Conflict data from UCDP (Sundberg, Ralph, and Erik Melander, 2013)"

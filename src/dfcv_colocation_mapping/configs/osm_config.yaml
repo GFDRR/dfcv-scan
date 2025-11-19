@@ -45,4 +45,6 @@ osm_pois:
             - money_transfer
             - payment_centre
         
-    
+country_map:
+    COD: congo_democratic_republic
+    COG: congo_brazzaville
