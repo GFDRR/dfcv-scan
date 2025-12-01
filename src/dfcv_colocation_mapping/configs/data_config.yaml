@@ -1,14 +1,37 @@
+assets_selected:
+    - 'worldpop'
+    
+assets_all:
+    - 'worldpop'
+    - 'global_landscan'
+    - 'worldcover_builtup'
+    - 'worldcover_cropland'
+    - 'global_bem'
+    
+osm_selected:
+    - 'pois'
+    - 'networks'
+    
+osm_all:
+    - 'pois'
+    - 'networks'
+
 conflict_selected:
     - 'acled'
+
+conflict_all:
+    - 'acled'
+    - 'ucdp'
 
 displacement_selected:
     - 'iom_dtm'
     - 'idmc_gidd'
     - 'unhcr'
 
-assets_selected:
-    - 'worldpop'
-    - 'global_bem'
+displacement_all:
+    - 'iom_dtm'
+    - 'idmc_gidd'
+    - 'unhcr'
 
 hazards_selected: 
     - 'global_earthquake'
@@ -18,22 +41,9 @@ hazards_selected:
     - 'global_drought_spei'
     - 'global_heat_stress'
     - 'global_wildfire_geos5'
-    - 'global_fluvial_flood_cdri'
-    
-assets_all:
-    - 'worldpop'
-    - 'worldcover_builtup'
-    - 'worldcover_cropland'
-    - 'global_bem'
-
-conflict_all:
-    - 'acled'
-    - 'ucdp'
-
-displacement_all:
-    - 'iom_dtm'
-    - 'idmc_gidd'
-    - 'unhcr'
+    - 'fluvial_defended_fathom'
+    - 'pluvial_defended_fathom'
+    - 'coastal_defended_fathom'
 
 hazards_all: # https://doc.emdat.be/docs/data-structure-and-content/glossary/
     hydrological:
@@ -58,21 +68,36 @@ hazards_all: # https://doc.emdat.be/docs/data-structure-and-content/glossary/
         - 'global_wildfire_gwis'
         - 'global_wildfire_gabam'
 
-assets_alias:
-    worldcover_builtup: "Built-up Area (Worldcover)"
-    worldcover_cropland: "Cropland Area (Worldcover)"
-    bem: "Building Valuation (Building Exposure Model)"
-    worldpop: "Population (Worldpop)"
+country_map_code:
+    COD: "Democratic Republic of Congo"
+    COG: "Republic of Congo"
+    
+conflict_columns:
+    - "wbg_acled"
+    - "ucdp"
 
-hazards_alias:
-    drought_spei: "Drought (SPEI)"
-    coastal_defended_fathom: "Coastal Flood (Fathom)"
-    fluvial_defended_fathom: "Fluvial Flood (Fathom)"
-    pluvial_defended_fathom: "Pluvial Flood (Fathom)"
-    landslide_earthquake_gfdrr: "Earthquake-triggered Landslide (GFDRR)"
-    landslide_precip_gfdrr: "Precipitation-triggered Landslide (GFDRR)"
-    fluvial_flood_cdri: "Fluvial Flood (CDRI)"
-    wildfire_geos5: "Wildfire (CDRI)"
+suffixes: 
+    - "exposure_absolute"
+    - "exposure_relative"
+    - "intensity_weighted_exposure_relative"
+
+nodata: 
+    fluvial_defended_fathom: [-32768, -32767]
+    pluvial_defended_fathom: [-32768, -32767]
+    coastal_defended_fathom: [-32768, -32767]
+
+worldcover_map_code:
+    tree_cover: 10
+    shrubland: 20
+    grassland: 30
+    cropland: 40
+    builtup: 50
+    bare_sparse_vegetation: 60
+    snow_and_ice: 70
+    permanent_water_bodies: 80
+    herbaceous_wetland: 90
+    mangroves: 95
+    moss_and_lichen: 100
 
 threshold:
     earthquake: 0.18 # https://dc.engconfintl.org/cgi/viewcontent.cgi?article=1015&context=geohazards
@@ -93,28 +118,6 @@ threshold:
     pluvial_defended_fathom: 40 # https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
     fluvial_defended_fathom: 40 # https://www.weather.gov/media/directives/010_pdfs/pd01001003a012018curr.pdf 
 
-nodata: 
-    fluvial_defended_fathom: [-32768, -32767]
-    pluvial_defended_fathom: [-32768, -32767]
-    coastal_defended_fathom: [-32768, -32767]
-
-country_map_code:
-    COD: "Democratic Republic of Congo"
-    COG: "Republic of Congo"
-
-worldcover_map_code:
-    tree_cover: 10
-    shrubland: 20
-    grassland: 30
-    cropland: 40
-    builtup: 50
-    bare_sparse_vegetation: 60
-    snow_and_ice: 70
-    permanent_water_bodies: 80
-    herbaceous_wetland: 90
-    mangroves: 95
-    moss_and_lichen: 100
-
 urls: 
     # Source: https://acleddata.com/
     acled_url: "https://acleddata.com/api/acled/read"
@@ -133,6 +136,8 @@ urls:
     idmc_gidd_url: "https://helix-tools-api.idmcdb.org/external-api/gidd/disaggregations/disaggregation-geojson/?client_id={}&release_environment=RELEASE&iso3__in={}&cause={}"
     # Source: https://giri.unepgrid.ch/map?view=MX-B7WR7-ZLQO2-J5OMQ&list=explore
     global_bem_url: "https://hazards-data.unepgrid.ch/bem_5x5_valfis.tif"
+    # Source: https://data.naturalcapitalproject.stanford.edu/dataset/sts-48373e687cf175d436957b3d71f36d8f2e628675861383125519d0cbd0326759?utm_source=chatgpt.com
+    global_landscan_url: "https://storage.googleapis.com/natcap-data-cache/global/landscan-pop/landscan_2023.tif"
     # Source: https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC
     global_ghsl_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_S_GLOBE_R2023A/GHS_BUILT_S_E2030_GLOBE_R2023A_54009_100/V1-0/GHS_BUILT_S_E2030_GLOBE_R2023A_54009_100_V1_0.zip"
     # Source: https://ucdp.uu.se/encyclopedia
