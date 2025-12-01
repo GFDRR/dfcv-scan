@@ -1,24 +1,25 @@
 import os
 import logging
 import matplotlib.pyplot as plt
-import ipywidgets as widgets
-from IPython.display import display, clear_output
-
-# Local package import
+from IPython.display import clear_output
 from dfcv_colocation_mapping import data_utils
+
+import ipywidgets as widgets
+from IPython.display import display
 
 
 class HierarchicalCheckboxes:
     def __init__(
         self,
+        asset_name,
         hierarchy,
         indent_per_level=20,
         selected_hierarchy=None,
         save_callback=None,
         save_label="Save Selection",
     ):
-        self.controls_container = widgets.VBox([])  # persistent container
-
+        self.controls_container = widgets.VBox([])
+        self.asset_name = asset_name
         self.hierarchy = hierarchy
         self.selected_hierarchy = selected_hierarchy or {}
         self.indent_per_level = indent_per_level
@@ -34,8 +35,13 @@ class HierarchicalCheckboxes:
         self._build_ui()
         self._apply_selection(self.selected_hierarchy)
         self._add_save_button()
+
+        title_label = widgets.HTML(
+            f"<b style='font-size:16px'>{self.asset_name}</b>"
+        )
+
         self.widget = widgets.VBox(
-            self.widgets_tree,
+            [title_label] + self.widgets_tree,
             layout=widgets.Layout(margin="0", padding="0", width="auto"),
         )
 
@@ -49,9 +55,7 @@ class HierarchicalCheckboxes:
                 margin=f"0 0 0 {indent}px",
                 padding="0",
             ),
-            style={
-                "description_width": "initial"
-            },  # ensures full label is visible
+            style={"description_width": "initial"},
         )
 
     def _build_ui(self):
@@ -120,7 +124,7 @@ class HierarchicalCheckboxes:
                     print("ℹ️ No save callback provided.")
 
         button.on_click(on_click)
-        self.widgets_tree.append(widgets.HBox([button]))
+        self.widgets_tree.append(widgets.VBox([button]))
         self.widgets_tree.append(output)
 
     def _on_category_change(self, change, category):
@@ -165,6 +169,7 @@ class HierarchicalCheckboxes:
                 for opt in self.option_checkboxes[cat][sub]:
                     if opt.description in selected_hierarchy[cat][sub]:
                         opt.value = True
+
         self.updating["lock"] = False
 
     def get_selected(self):
@@ -183,12 +188,91 @@ class HierarchicalCheckboxes:
         display(self.widget)
 
 
+class MultiSelectorWidget:
+    def __init__(self, dataset, data_all, data_selected, save_callback=None):
+        self.dataset = dataset
+        self.data_all = data_all
+        self.data_selected = data_selected
+        self.save_callback = save_callback
+
+        self.data_all = (
+            data_utils.get_deepest_values(self.data_all)
+            if "hazard" in dataset
+            else data_all
+        )
+        self.checkboxes = self._build_checkboxes(
+            self.data_all, self.data_selected
+        )
+        self.section = self._build_section(
+            dataset,
+            self.checkboxes,
+            self.data_selected,
+            f"Save {dataset} selection",
+        )
+        self.widget = widgets.VBox([self.section])
+
+    def _build_checkboxes(self, items, selected):
+        """Create a list of checkboxes for a list of strings."""
+        checkboxes = []
+        for item in items:
+            cb = widgets.Checkbox(
+                value=item in selected,
+                description=item,
+                layout=widgets.Layout(width="auto"),
+                style={"description_width": "initial"},
+            )
+            checkboxes.append(cb)
+        return checkboxes
+
+    def _build_section(self, title, checkboxes, data_selected, button_label):
+        """Build a titled section with checkboxes and a save button."""
+        title_label = widgets.HTML(
+            f"<b style='font-size:16px'>{title.upper()}</b>"
+        )
+
+        save_button = widgets.Button(
+            description=button_label,
+            button_style="success",
+            icon="save",
+            layout=widgets.Layout(width="200px", margin="10px 0 0 0"),
+        )
+
+        output = widgets.Output()
+
+        def on_click(b):
+            with output:
+                output.clear_output()
+                selected = self.get_selected()
+                if callable(self.save_callback):
+                    self.save_callback(selected)
+                    print(f"✅ {title.upper()} selection saved.")
+
+        save_button.on_click(on_click)
+
+        section = widgets.VBox(
+            [
+                title_label,
+                widgets.VBox(checkboxes, layout=widgets.Layout(margin="0")),
+                widgets.HBox([save_button]),
+                output,
+            ],
+            layout=widgets.Layout(margin="0 0 10px 0"),
+        )
+        return section
+
+    def get_selected(self):
+        return [cb.description for cb in self.checkboxes if cb.value]
+
+    def show(self):
+        display(self.widget)
+
+
 class MapWidget:
     def __init__(
         self,
         geoplot,
         map_mode: str = "choropleth",
-        var_list: list = [],
+        var_list: list = None,
         default_var: str = None,
         var_label: str = "Variable:",
         enable_conflict: bool = False,
@@ -212,8 +296,17 @@ class MapWidget:
         self.enable_mhs_exposure = enable_mhs_exposure
         self.map_mode = map_mode
 
-        if len(self.var_list) == 0:
-            self.var_list = self.geoplot.dm.data.columns
+        self.var_list = var_list or self.geoplot.dm.data.columns
+        self.all_var_list = self.geoplot.dm.data.columns
+
+        self.map_title = widgets.Text(
+            value=None,
+            description="Title:",  # Label for the text box
+        )
+        self.map_subtitle = widgets.Text(
+            value=None,
+            description="Subtitle:",  # Label for the text box
+        )
 
         # Choropleth
         self.variable_dropdown = widgets.Dropdown(
@@ -221,14 +314,18 @@ class MapWidget:
             value=self.default_var,
             description=self.var_label,
         )
+        self.all_variable_dropdown = widgets.Dropdown(
+            options=self.all_var_list,
+            value=self.default_var,
+            description=self.var_label,
+        )
 
         self.legend_type = widgets.Dropdown(
             options=["default", "colorbar", "barplot"],
-            value="default",
+            value="colorbar",
             description="Legend:",
         )
 
-        # Bivariate Choropleth
         self.binning = widgets.Dropdown(
             options=["equal_intervals", "quantiles"],
             value="equal_intervals",
@@ -246,24 +343,23 @@ class MapWidget:
             value="worldpop",
             description="Asset:",
         )
-        exposure_options = ["absolute", "relative"]
-        hazard_exposure_options = exposure_options + [
-            "intensity_weighted_relative"
-        ]
 
-        self.conflict_exposure_type = widgets.Dropdown(
-            options=exposure_options,
-            value="relative",
-            description="Conflict exposure:",
-        )
+        hazard_exposure_options = self.geoplot.dm.config["suffixes"]
         self.hazard_exposure_type = widgets.Dropdown(
             options=hazard_exposure_options,
-            value="relative",
+            value="exposure_relative",
             description="Hazard exposure:",
         )
+
+        conflict_exposure_options = hazard_exposure_options[:-1]
+        self.conflict_exposure_type = widgets.Dropdown(
+            options=conflict_exposure_options,
+            value="exposure_relative",
+            description="Conflict exposure:",
+        )
         self.conflict_data_source = widgets.Dropdown(
-            options=["ACLED", "UCDP"],
-            value="ACLED",
+            options=["acled", "ucdp"],
+            value="acled",
             description="Conflict data:",
         )
         self.conflict_column = widgets.Dropdown(
@@ -273,25 +369,18 @@ class MapWidget:
                 "fatalities_per_conflict",
             ],
             value="conflict_count",
-            description="Conflict column:",
+            description="Column:",
         )
-
+        conflict_exposure_sources = self.geoplot.dm.config["conflict_columns"]
         self.conflict_exposure_source = widgets.Dropdown(
-            options=[
-                "ACLED (WBG calculation)",
-                "ACLED (population_best)",
-                "UCDP",
-            ],
-            value="ACLED (WBG calculation)",
+            options=conflict_exposure_sources,
+            value=conflict_exposure_sources[0],
             description="Conflict data:",
         )
 
-        hazard_options = [
-            x.replace("global_", "") for x in geoplot.dm.config["hazard_data"]
-        ]
         self.hazard_exposure_source = widgets.Dropdown(
-            options=hazard_options,
-            value=hazard_options[0],
+            options=geoplot.dm.hazard_names,
+            value=geoplot.dm.hazard_names[0],
             description="Hazard:",
         )
 
@@ -305,20 +394,17 @@ class MapWidget:
             description="MHS aggregation:",
         )
         self.hazard_category = widgets.Dropdown(
-            options=["all"] + list(geoplot.dm.config["hazards"].keys()),
+            options=["all"] + list(geoplot.dm.config["hazards_all"].keys()),
             value="all",
             description="MHS category:",
         )
 
-        # --- Region selection ---
         self.zoom_to_region = widgets.Checkbox(
             value=False,
             description="Zoom to region",
         )
 
-        adm_options = ["ADM1", "ADM2"]
-        if geoplot.dm.group is not None:
-            adm_options = [geoplot.dm.group] + adm_options
+        adm_options = [col for col in geoplot.dm.data.columns if "ADM" in col]
         self.adm_level = widgets.Dropdown(
             options=adm_options,
             value=adm_options[0],
@@ -330,7 +416,6 @@ class MapWidget:
             description="Region:",
         )
 
-        # --- Overlay conflict points ---
         self.overlay_conflict_points = widgets.Checkbox(
             value=False,
             description="Overlay conflict points",
@@ -340,16 +425,16 @@ class MapWidget:
             value="ACLED",
             description="Conflict data:",
         )
-
         self.conflict_points_column = widgets.Dropdown(
             options=[
+                None,
                 "disorder_type",
                 "event_type",
                 "type_of_violence",
                 "sub_event_type",
             ],
             value="disorder_type",
-            description="Conflict column:",
+            description="Category:",
         )
 
         self.conflict_point_columns_by_source = {
@@ -367,7 +452,7 @@ class MapWidget:
         self.conflict_markerscale = widgets.FloatSlider(
             value=10,
             min=1,
-            max=100,
+            max=500,
             step=1,
             description="Marker size:",
             continuous_update=False,
@@ -385,81 +470,165 @@ class MapWidget:
             min=0.0,
             max=1.0,
             step=0.025,
-            description="Legend Y:",
+            description="Legend 1 Y:",
             continuous_update=False,
         )
-
-        # --- Overlay OSM points ---
-        self.overlay_osm_points = widgets.Checkbox(
-            value=False, description="Overlay OSM points"
-        )
-        osm_pois = [x for x in geoplot.dm.osm_pois]
-        self.osm_poi_selector = widgets.SelectMultiple(
-            options=osm_pois,
-            value=[
-                osm_pois[0],
-            ],
-            description="OSM POI Data:",
-            style={"description_width": "initial"},
-            layout=widgets.Layout(width="300px", height="90px"),
-        )
-
-        # --- Overlay OSM networks---
-        self.overlay_osm_networks = widgets.Checkbox(
-            value=False, description="Overlay OSM networks"
-        )
-
-        self.osm_pois_markerscale = widgets.FloatSlider(
-            value=5,
-            min=1,
-            max=100,
-            step=1,
-            description="Marker size:",
-            continuous_update=False,
-        )
-        self.osm_pois_alpha = widgets.FloatSlider(
-            value=0.6,
-            min=0.1,
-            max=1.0,
-            step=0.05,
-            description="Transparency:",
-            continuous_update=False,
-        )
-        self.osm_pois_legend1_y = widgets.FloatSlider(
-            value=0.30,
-            min=0.0,
-            max=1.0,
-            step=0.025,
-            description="Legend Y:",
-            continuous_update=False,
-        )
-
-        osm_networks = [x for x in geoplot.dm.osm_networks]
-        self.osm_network_selector = widgets.SelectMultiple(
-            options=osm_networks,
-            value=[
-                osm_networks[0],
-            ],
-            description="OSM Networks:",
-            style={"description_width": "initial"},
-            layout=widgets.Layout(width="300px", height="90px"),
-        )
-        self.osm_networks_alpha = widgets.FloatSlider(
-            value=0.6,
-            min=0.1,
-            max=1.0,
-            step=0.05,
-            description="Transparency:",
-            continuous_update=False,
-        )
-        self.osm_networks_legend1_y = widgets.FloatSlider(
+        self.conflict_legend2_y = widgets.FloatSlider(
             value=0.20,
             min=0.0,
             max=1.0,
             step=0.025,
-            description="Legend Y:",
+            description="Legend 2 Y:",
             continuous_update=False,
         )
+
+        self.overlay_idp_points = widgets.Checkbox(
+            value=False,
+            description="Overlay IDP data",
+        )
+        self.idp_points = widgets.Dropdown(
+            options=[
+                "idmc_gidd_combined",
+                "idmc_gidd_disaster",
+                "idmc_gidd_conflict",
+            ],
+            value="idmc_gidd_combined",
+            description="IDP data:",
+        )
+
+        self.idp_points_column = widgets.Dropdown(
+            options=[
+                None,
+                "Event cause",
+                "Hazard category",
+                "Hazard sub category",
+                "Hazard type",
+                "Hazard sub type",
+                "Violence type",
+            ],
+            value="Event cause",
+            description="Category:",
+        )
+
+        self.idp_point_columns_by_source = {
+            "idmc_gidd_combined": ["Event cause"],
+            "idmc_gidd_disaster": [
+                "Hazard category",
+                "Hazard sub category",
+                "Hazard type",
+                "Hazard sub type",
+            ],
+            "idmc_gidd_conflict": ["Violence type"],
+        }
+
+        self.idp_points.observe(
+            self._on_idp_points_source_change, names="value"
+        )
+        self._on_idp_points_source_change({"new": self.idp_points.value})
+
+        self.idp_markerscale = widgets.FloatSlider(
+            value=10,
+            min=1,
+            max=500,
+            step=1,
+            description="Marker size:",
+            continuous_update=False,
+        )
+        self.idp_alpha = widgets.FloatSlider(
+            value=0.7,
+            min=0.1,
+            max=1.0,
+            step=0.05,
+            description="Transparency:",
+            continuous_update=False,
+        )
+        self.idp_legend1_y = widgets.FloatSlider(
+            value=0.30,
+            min=0.0,
+            max=1.0,
+            step=0.025,
+            description="Legend 1 Y:",
+            continuous_update=False,
+        )
+        self.idp_legend2_y = widgets.FloatSlider(
+            value=0.20,
+            min=0.0,
+            max=1.0,
+            step=0.025,
+            description="Legend 2 Y:",
+            continuous_update=False,
+        )
+
+        if len(self.geoplot.dm.config["osm_selected"]) > 0:
+            self.overlay_osm_points = widgets.Checkbox(
+                value=False, description="Overlay OSM points"
+            )
+            osm_pois = [x for x in geoplot.dm.osm_pois]
+            self.osm_poi_selector = widgets.SelectMultiple(
+                options=osm_pois,
+                value=[
+                    osm_pois[0],
+                ],
+                description="OSM Points:",
+                style={"description_width": "initial"},
+                layout=widgets.Layout(width="300px", height="90px"),
+            )
+
+            self.overlay_osm_networks = widgets.Checkbox(
+                value=False, description="Overlay OSM networks"
+            )
+
+            self.osm_pois_markerscale = widgets.FloatSlider(
+                value=5,
+                min=1,
+                max=100,
+                step=1,
+                description="Marker size:",
+                continuous_update=False,
+            )
+            self.osm_pois_alpha = widgets.FloatSlider(
+                value=0.6,
+                min=0.1,
+                max=1.0,
+                step=0.05,
+                description="Transparency:",
+                continuous_update=False,
+            )
+            self.osm_pois_legend1_y = widgets.FloatSlider(
+                value=0.30,
+                min=0.0,
+                max=1.0,
+                step=0.025,
+                description="Legend Y:",
+                continuous_update=False,
+            )
+
+            osm_networks = [x for x in geoplot.dm.osm_networks]
+            self.osm_network_selector = widgets.SelectMultiple(
+                options=osm_networks,
+                value=[
+                    osm_networks[0],
+                ],
+                description="OSM Networks:",
+                style={"description_width": "initial"},
+                layout=widgets.Layout(width="300px", height="90px"),
+            )
+            self.osm_networks_alpha = widgets.FloatSlider(
+                value=0.6,
+                min=0.1,
+                max=1.0,
+                step=0.05,
+                description="Transparency:",
+                continuous_update=False,
+            )
+            self.osm_networks_legend1_y = widgets.FloatSlider(
+                value=0.20,
+                min=0.0,
+                max=1.0,
+                step=0.025,
+                description="Legend Y:",
+                continuous_update=False,
+            )
 
         self.overlay_hatches = widgets.Checkbox(
             value=False, description="Overlay top n by column"
@@ -499,6 +668,17 @@ class MapWidget:
 
         self._build_layout()
 
+    def _on_idp_points_source_change(self, change):
+        """Update available columns when the points source changes."""
+        source = change["new"]
+        valid_columns = self.idp_point_columns_by_source.get(source, [])
+        self.idp_points_column.options = valid_columns
+
+        if self.idp_points_column.value not in valid_columns:
+            self.idp_points_column.value = (
+                valid_columns[0] if valid_columns else None
+            )
+
     def _on_conflict_points_source_change(self, change):
         """Update available columns when the points source changes."""
         source = change["new"]
@@ -532,27 +712,34 @@ class MapWidget:
             if self.zoom_to_region.value:
                 zoom_to = {self.adm_level.value: self.adm_string.value}
 
+            title = (
+                self.map_title.value if len(self.map_title.value) > 0 else None
+            )
+            subtitle = (
+                self.map_subtitle.value
+                if len(self.map_subtitle.value) > 0
+                else None
+            )
+
+            var, ax, xpos = None, None, None
             zorder = 1
             if self.map_mode == "choropleth":
                 if self.enable_conflict:
-                    var = (
-                        f"{self.conflict_data_source.value.lower()}_"
-                        f"{self.asset.value}_{self.conflict_column.value}"
-                    )
+                    if self.conflict_data_source.value.lower() == "acled":
+                        var = (
+                            f"{self.conflict_data_source.value.lower()}_"
+                            f"{self.asset.value}_{self.conflict_column.value}"
+                        )
+                    else:
+                        var = (
+                            f"{self.conflict_data_source.value.lower()}_"
+                            f"total_{self.conflict_column.value}"
+                        )
                 if self.enable_conflict_exposure:
-                    conflict_source = data_utils.get_conflict_source(
-                        self.conflict_exposure_source.value
-                    )
-                    exposure = data_utils.get_exposure(
-                        self.conflict_exposure_type.value
-                    )
-                    var = f"{conflict_source}_{self.asset.value}_{exposure}"
+                    var = f"{self.conflict_exposure_source.value}_{self.asset.value}_{self.conflict_exposure_type.value}"
 
                 if self.enable_hazard_exposure:
-                    exposure = data_utils.get_exposure(
-                        self.hazard_exposure_type.value
-                    )
-                    var = f"{self.hazard_exposure_source.value}_{self.asset.value}_{exposure}"
+                    var = f"{self.hazard_exposure_source.value}_{self.asset.value}_{self.hazard_exposure_type.value}"
 
                 if self.enable_mhs_exposure:
                     self.geoplot.dm.mhs_aggregation = (
@@ -564,58 +751,53 @@ class MapWidget:
                             aggregation=self.mhs_aggregation.value,
                         )
                     )
-                    exposure = data_utils.get_exposure(
-                        self.hazard_exposure_type.value
-                    )
-                    var = f"mhs_{self.hazard_category.value}_{self.asset.value}_{exposure}"
+                    var = f"mhs_{self.hazard_category.value}_{self.asset.value}_{self.hazard_exposure_type.value}"
 
                 if self.enable_conflict_exposure and self.enable_mhs_exposure:
-                    conflict_source = data_utils.get_conflict_source(
-                        self.conflict_exposure_source.value
-                    )
-                    exposure = data_utils.get_exposure(
-                        self.hazard_exposure_type.value
-                    )
-                    var = f"mhs_{self.hazard_category.value}_{conflict_source}_{self.asset.value}_{exposure}"
+                    var = f"mhs_{self.hazard_category.value}_{self.conflict_exposure_source.value}_{self.asset.value}_{self.hazard_exposure_type.value}"
 
                 if self.variable_dropdown.value is not None:
                     var = self.variable_dropdown.value
 
-                logging.info(f"Plotting variable: {var}")
-                self.last_vars = [var]
+                if var is not None:
+                    logging.info(f"Plotting variable: {var}")
+                    self.last_vars = [var]
 
-                var_bounds = [None, None]
-                if self.var_bounds_selector.value == "[0, 1]":
-                    var_bounds = [0, 1]
+                    var_bounds = [None, None]
+                    if self.var_bounds_selector.value == "[0, 1]":
+                        var_bounds = [0, 1]
 
-                # Plot the choropleth on the axes
-                ax, xpos = self.geoplot.plot_choropleth(
-                    var=var,
-                    kwargs={"legend_type": self.legend_type.value},
-                    zoom_to=zoom_to,
-                    var_bounds=var_bounds,
-                    binning=self.binning.value,
-                    zorder=zorder,
-                )
-                zorder += 1
+                    # Plot the choropleth on the axes
+                    ax, xpos = self.geoplot.plot_choropleth(
+                        var=var,
+                        kwargs={"legend_type": self.legend_type.value},
+                        zoom_to=zoom_to,
+                        var_bounds=var_bounds,
+                        title=title,
+                        subtitle=subtitle,
+                        binning=self.binning.value,
+                        zorder=zorder,
+                    )
+                    zorder += 1
 
-            # --- Bivariate mode ---
             else:
-                if self.enable_conflict_exposure:
-                    conflict_source = data_utils.get_conflict_source(
-                        self.conflict_exposure_source.value
-                    )
-                    conflict_exposure = data_utils.get_exposure(
-                        self.conflict_exposure_type.value
-                    )
-                    var1 = f"{conflict_source}_{self.asset.value}_{conflict_exposure}"
+                if self.enable_conflict:
+                    if self.conflict_data_source.value.lower() == "acled":
+                        var1 = (
+                            f"{self.conflict_data_source.value.lower()}_"
+                            f"{self.asset.value}_{self.conflict_column.value}"
+                        )
+                    else:
+                        var1 = (
+                            f"{self.conflict_data_source.value.lower()}_"
+                            f"total_{self.conflict_column.value}"
+                        )
+                elif self.enable_conflict_exposure:
+                    var1 = f"{self.conflict_exposure_source.value}_{self.asset.value}_{self.conflict_exposure_type.value}"
 
                 if self.enable_hazard_exposure or self.enable_mhs_exposure:
-                    hazard_exposure = data_utils.get_exposure(
-                        self.hazard_exposure_type.value
-                    )
                     if self.enable_hazard_exposure:
-                        var2 = f"{self.hazard_exposure_source.value}_{self.asset.value}_{hazard_exposure}"
+                        var2 = f"{self.hazard_exposure_source.value}_{self.asset.value}_{self.hazard_exposure_type.value}"
 
                     elif self.enable_mhs_exposure:
                         self.geoplot.dm.data = (
@@ -624,7 +806,7 @@ class MapWidget:
                                 aggregation=self.mhs_aggregation.value,
                             )
                         )
-                        var2 = f"mhs_{self.hazard_category.value}_{self.asset.value}_{hazard_exposure}"
+                        var2 = f"mhs_{self.hazard_category.value}_{self.asset.value}_{self.hazard_exposure_type.value}"
 
                 logging.info(f"Plotting variable 1: {var1}")
                 logging.info(f"Plotting variable 2: {var2}")
@@ -636,67 +818,96 @@ class MapWidget:
                     var2=var2,
                     var1_bounds=[0, 1],
                     var2_bounds=[0, 1],
+                    title=title,
+                    subtitle=subtitle,
                     binning=self.binning.value,
                     zoom_to=zoom_to,
                     zorder=zorder,
                 )
                 zorder += 1
 
-            # Optional: overlay points
             if self.overlay_conflict_points.value:
-                self.save_suffixes += "-acled"
                 ax, xpos = self.geoplot.plot_points(
                     self.conflict_points_column.value,
+                    asset=self.asset.value,
                     dataset=self.conflict_points.value.lower(),
                     zoom_to=zoom_to,
+                    title=title,
+                    subtitle=subtitle,
                     ax=ax,
                     xpos=xpos,
                     zorder=zorder,
                     kwargs={
                         "alpha": self.conflict_alpha.value,
                         "legend1_y": self.conflict_legend1_y.value,
+                        "legend2_y": self.conflict_legend2_y.value,
                         "markerscale": self.conflict_markerscale.value,
                     },
                 )
+                self.last_vars.append(self.conflict_points_column.value)
                 zorder += 1
 
-            if self.overlay_osm_networks.value:
-                self.save_suffixes += "-osm_networks"
-                ax, xpos = self.geoplot.plot_lines(
-                    "tag",
-                    dataset="osm",
-                    osm_tags=self.osm_network_selector.value,
-                    zoom_to=zoom_to,
-                    ax=ax,
-                    xpos=xpos,
-                    zorder=zorder,
-                    kwargs={
-                        "alpha": self.osm_networks_alpha.value,
-                        "legend_y": self.osm_networks_legend1_y.value,
-                    },
-                )
-                zorder += 1
-
-            if self.overlay_osm_points.value:
-                self.save_suffixes += "-osm_pois"
+            if self.overlay_idp_points.value:
+                self.save_suffixes += "-displacement"
                 ax, xpos = self.geoplot.plot_points(
-                    "tag",
-                    dataset="osm",
-                    osm_tags=self.osm_poi_selector.value,
+                    self.idp_points_column.value,
+                    dataset=self.idp_points.value.lower(),
+                    value_col="total_idps",
+                    title=title,
+                    subtitle=subtitle,
                     zoom_to=zoom_to,
                     ax=ax,
                     xpos=xpos,
                     zorder=zorder,
                     kwargs={
-                        "alpha": self.osm_pois_alpha.value,
-                        "legend1_y": self.osm_pois_legend1_y.value,
-                        "markerscale": self.osm_pois_markerscale.value,
+                        "alpha": self.idp_alpha.value,
+                        "legend1_y": self.idp_legend1_y.value,
+                        "legend2_y": self.idp_legend2_y.value,
+                        "markerscale": self.idp_markerscale.value,
                     },
                 )
+                self.last_vars.append(self.idp_points_column.value)
                 zorder += 1
+
+            if len(self.geoplot.dm.config["osm_selected"]) > 0:
+                if self.overlay_osm_networks.value:
+                    ax, xpos = self.geoplot.plot_lines(
+                        "tag",
+                        dataset="osm",
+                        osm_tags=self.osm_network_selector.value,
+                        zoom_to=zoom_to,
+                        ax=ax,
+                        xpos=xpos,
+                        zorder=zorder,
+                        kwargs={
+                            "alpha": self.osm_networks_alpha.value,
+                            "legend_y": self.osm_networks_legend1_y.value,
+                        },
+                    )
+                    self.last_vars.extend(self.osm_network_selector.value)
+                    zorder += 1
+
+                if self.overlay_osm_points.value:
+                    ax, xpos = self.geoplot.plot_points(
+                        "tag",
+                        dataset="osm",
+                        title=title,
+                        subtitle=subtitle,
+                        osm_tags=self.osm_poi_selector.value,
+                        zoom_to=zoom_to,
+                        ax=ax,
+                        xpos=xpos,
+                        zorder=zorder,
+                        kwargs={
+                            "alpha": self.osm_pois_alpha.value,
+                            "legend1_y": self.osm_pois_legend1_y.value,
+                            "markerscale": self.osm_pois_markerscale.value,
+                        },
+                    )
+                    self.last_vars.extend(self.osm_poi_selector.value)
+                    zorder += 1
 
             if self.overlay_hatches.value:
-                self.save_suffixes += "-hatches"
                 ax, xpos = self.geoplot.plot_hatches(
                     adm_level=self.geoplot.dm.adm_level,
                     column=self.variable_dropdown.value,
@@ -710,14 +921,13 @@ class MapWidget:
                         "legend_y": self.hatches_legend_y.value,
                     },
                 )
+                self.last_vars.append(self.variable_dropdown.value)
                 zorder += 1
 
             # Render the figure in the notebook
             new_figs = set(plt.get_fignums()) - existing_figs
             if new_figs:
-                self.last_fig = plt.figure(
-                    list(new_figs)[-1]
-                )  # grab latest new fig
+                self.last_fig = plt.figure(list(new_figs)[-1])
             else:
                 self.last_fig = plt.gcf()
             plt.show()
@@ -766,7 +976,7 @@ class MapWidget:
             )
             os.makedirs(sub_folder, exist_ok=True)
 
-            # --- Save CSV (no geometry)
+            # Save CSV (no geometry)
             csv_dir = os.path.join(sub_folder, "csv")
             os.makedirs(csv_dir, exist_ok=True)
             csv_path = os.path.join(csv_dir, f"{filename_base}.csv")
@@ -775,13 +985,8 @@ class MapWidget:
             print(f"✅ Data subset saved to: {csv_path}")
             print(f"   Variables: {', '.join(self.last_vars)}")
 
-            # --- Save current figure if exists
             if self.last_fig is not None:
-                img_dir = os.path.join(sub_folder, "png")
-                os.makedirs(img_dir, exist_ok=True)
-                img_path = os.path.join(
-                    img_dir, f"{filename_base}{self.save_suffixes}.png"
-                )
+                img_path = os.path.join(sub_folder, f"{filename_base}.png")
                 self.last_fig.savefig(img_path, dpi=300, bbox_inches="tight")
                 print(f"🗺️ Plot saved to: {img_path}")
 
@@ -801,9 +1006,20 @@ class MapWidget:
 
     def _build_layout(self):
         """Assemble widget layout."""
+
+        titles = widgets.VBox(
+            [
+                self.map_title,
+                self.map_subtitle,
+            ]
+        )
+        controls = [widgets.HTML("<hr style='margin:10px 0'>"), titles]
+
         zoom_box = widgets.VBox(
             [self.zoom_to_region, self.adm_level, self.adm_string]
         )
+        controls.extend([widgets.HTML("<hr style='margin:10px 0'>"), zoom_box])
+
         conflict_points_box = widgets.VBox(
             [
                 self.overlay_conflict_points,
@@ -816,31 +1032,109 @@ class MapWidget:
                 self.conflict_markerscale,
                 self.conflict_alpha,
                 self.conflict_legend1_y,
+                self.conflict_legend2_y,
             ]
         )
-        osm_pois_box = widgets.VBox(
-            [self.overlay_osm_points, self.osm_poi_selector]
-        )
-        osm_pois_style_box = widgets.VBox(
+        controls.extend(
             [
-                self.osm_pois_markerscale,
-                self.osm_pois_alpha,
-                self.osm_pois_legend1_y,
+                widgets.HTML("<hr style='margin:10px 0'>"),
+                widgets.HBox(
+                    [
+                        conflict_points_box,
+                        conflict_style_box,
+                    ]
+                ),
             ]
         )
-        osm_networks_box = widgets.VBox(
-            [self.overlay_osm_networks, self.osm_network_selector]
+
+        idp_points_box = widgets.VBox(
+            [
+                self.overlay_idp_points,
+                self.idp_points,
+                self.idp_points_column,
+            ]
         )
-        osm_networks_style_box = widgets.VBox(
-            [self.osm_networks_alpha, self.osm_networks_legend1_y]
+        idp_style_box = widgets.VBox(
+            [
+                self.idp_markerscale,
+                self.idp_alpha,
+                self.idp_legend1_y,
+                self.idp_legend2_y,
+            ]
         )
+        controls.extend(
+            [
+                widgets.HTML("<hr style='margin:10px 0'>"),
+                widgets.HBox(
+                    [
+                        idp_points_box,
+                        idp_style_box,
+                    ]
+                ),
+            ]
+        )
+
+        if len(self.geoplot.dm.config["osm_selected"]) > 0:
+            osm_pois_box = widgets.VBox(
+                [self.overlay_osm_points, self.osm_poi_selector]
+            )
+            osm_pois_style_box = widgets.VBox(
+                [
+                    self.osm_pois_markerscale,
+                    self.osm_pois_alpha,
+                    self.osm_pois_legend1_y,
+                ]
+            )
+            osm_networks_box = widgets.VBox(
+                [self.overlay_osm_networks, self.osm_network_selector]
+            )
+            osm_networks_style_box = widgets.VBox(
+                [self.osm_networks_alpha, self.osm_networks_legend1_y]
+            )
+            controls.extend(
+                [
+                    widgets.HTML("<hr style='margin:10px 0'>"),
+                    widgets.HBox(
+                        [
+                            osm_pois_box,
+                            osm_pois_style_box,
+                        ]
+                    ),
+                    widgets.HTML("<hr style='margin:10px 0'>"),
+                    widgets.HBox(
+                        [
+                            osm_networks_box,
+                            osm_networks_style_box,
+                        ]
+                    ),
+                ]
+            )
+
         hatches_box = widgets.VBox(
             [
                 self.overlay_hatches,
-                self.variable_dropdown,
+                self.all_variable_dropdown,
                 self.hatches_title,
+            ]
+        )
+        hatches_style_box = widgets.VBox(
+            [
                 self.hatches_legend_x,
                 self.hatches_legend_y,
+            ]
+        )
+        controls.extend(
+            [
+                widgets.HTML("<hr style='margin:10px 0'>"),
+                widgets.HBox([hatches_box, hatches_style_box]),
+            ]
+        )
+
+        controls.extend(
+            [
+                widgets.HTML("<hr style='margin:10px 0'>"),
+                self.run_button,
+                self.save_button,
             ]
         )
 
@@ -852,18 +1146,8 @@ class MapWidget:
                         self.binning,
                         self.var_bounds_selector,
                     ]
-                ),
-                zoom_box,
-                conflict_points_box,
-                conflict_style_box,
-                osm_pois_box,
-                osm_pois_style_box,
-                osm_networks_box,
-                osm_networks_style_box,
-                hatches_box,
-                self.run_button,
-                self.save_button,
-            ]
+                )
+            ] + controls
 
             if self.enable_conflict:
                 box = widgets.HBox(
@@ -922,17 +1206,7 @@ class MapWidget:
                 hazard_box,
                 self.asset,
                 self.binning,
-                zoom_box,
-                conflict_points_box,
-                conflict_style_box,
-                osm_pois_box,
-                osm_pois_style_box,
-                osm_networks_box,
-                osm_networks_style_box,
-                hatches_box,
-                self.run_button,
-                self.save_button,
-            ]
+            ] + controls
 
         self.controls = widgets.VBox(controls)
 
