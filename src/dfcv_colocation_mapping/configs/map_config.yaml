@@ -66,7 +66,7 @@ bivariate_choropleth:
     title_fontsize: 15
     subtitle_fontsize: 10
     subtitle_gap: 0.005
-    annotation_fontsize: 6
+    annotation_fontsize: 8
     annotation_gap: 0.01
     annotation_color: "#909090"
     legend_fontsize: 5
@@ -252,11 +252,34 @@ folium:
         fillOpacity: 0.50, 
         weight: 0.1
 
+assets_alias:
+    worldcover_builtup: "Built-up Area"
+    worldcover_cropland: "Cropland Area"
+    bem: "Building Valuation"
+    worldpop: "Population"
+
+hazards_alias:
+    coastal_defended_fathom: "Coastal Flood"
+    fluvial_defended_fathom: "Fluvial Flood"
+    pluvial_defended_fathom: "Pluvial Flood"
+    landslide_earthquake_gfdrr: "Earthquake-triggered Landslide"
+    landslide_precip_gfdrr: "Precipitation-triggered Landslide"
+    fluvial_flood_cdri: "Fluvial Flood"
+    wildfire_geos5: "Wildfires"
+    heat_stress: "Heat Stress"
+    earthquake: "Earthquakes"
+    drought_spei: "Droughts"
+    cyclone: "Cyclones"
+
 legend_titles:
     tag: "Infrastructure"
+    disorder_type: "ACLED Conflict Disorder Type"
+    event_type: "ACLED Conflict Event Type"
+    sub_event_type: "ACLED Conflict Sub-event Type"
     disaster_idp_total: "Number of IDPs \nfrom Disasters"
     conflict_idp_total: "Number of IDPs \nfrom Conflicts"
-    idp_total: "Number of IDPs"
+    idp_total: "Total number of IDPs"
+    idp_mean: "Average number of IDPs"
     osm_category: "OSM Category"
     total_conflict_count: "Number of conflict events"
     conflict_count: "Number of conflict events \naffecting {}"
@@ -265,9 +288,9 @@ legend_titles:
     intensity_weighted_exposure_relative: "Intensity-weighted Relative \n{} Exposure Score"
     intensity_weighted_exposure: "Intensity-weighted \n{} Exposure Score"
     mhs: "{} \n{} Exposure Score"
-    exposure_relative: "Proportion of {}  \nexposed to {}"
+    exposure_relative: "Proportion of {} \nexposed to {}"
     exposure: "{} exposed \nto {}"
-    landslide_earthquake: "Susceptibility to \nEarthquake-triggered Landslide"
+    landslide_earthquake: "Mean Average Annual Frequency \nof Earthquake-triggered Landslide"
     landslide_precip: "Mean Average Annual Frequency \nof Precipitation-triggered Landslide"
     earthquake: "Peak Ground \nAcceleration (PGA)"
     cyclone: "Windspeed"
@@ -280,7 +303,8 @@ legend_titles:
 var_titles:
     disaster_idp_total: "Number of IDPs from Disasters"
     conflict_idp_total: "Number of IDPs from Conflicts"
-    idp_total: "Number of IDPs"
+    idp_total: "Total number of IDPs"
+    idp_mean: "Average number of IDPs"
     total_conflict_count: "Number of Conflict Events"
     total_fatalities_per_conflict: "Fatalities per Conflict"
     conflict_count: "Number of Conflict Events Affecting {}"
