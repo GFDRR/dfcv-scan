@@ -138,7 +138,6 @@ urls:
     gbhumanitarian_url: "https://www.geoboundaries.org/api/current/gbHumanitarian/"
     # Source: https://www.geoboundaries.org/
     gbopen_url: "https://www.geoboundaries.org/api/current/gbOpen/"
-    # Source: 
     # Codes: https://gis.unhcr.org/arcgis/rest/services/core_v2/wrl_prp_p_unhcr_ALL/MapServer/0?f=pjson
     unhcr_url: "https://gis.unhcr.org/arcgis/rest/services/core_v2/wrl_prp_p_unhcr_ALL/FeatureServer/0/query"
     # Source: https://hub.worldpop.org/geodata/listing?id=69
