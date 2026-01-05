@@ -136,7 +136,7 @@ class GeoPlot:
 
         # Get variable title
         var_title = var_title or self._get_title(var, "legend_titles")
-        data = data or self.dm.data
+        data = self.dm.data if data is None else data
         data = data.copy()
         original_crs = data.crs
 
@@ -252,7 +252,7 @@ class GeoPlot:
         config = self.map_config[key]
 
         # Copy data and country values
-        data = data or self.dm.data
+        data = self.dm.data if data is None else data
         data = data.copy()
         iso_code = data.iso_code.values[0]
         raster_file = raster_file or os.path.join(
@@ -927,7 +927,7 @@ class GeoPlot:
         self.update(key, kwargs)
         config = self.map_config[key]
 
-        data = data or self.dm.data
+        data = self.dm.data if data is None else data
         data = data.copy().to_crs(config["crs"])
 
         # Get dissolved country boundary
@@ -1129,7 +1129,7 @@ class GeoPlot:
         self.update(key, kwargs)
         config = self.map_config[key]
 
-        data = data or self.dm.data
+        data = self.dm.data if data is None else data
         data = data.copy().to_crs(config["crs"])
 
         # Create figure and axis
@@ -1592,7 +1592,7 @@ class GeoPlot:
         config = self.map_config[key]
 
         # Copy and reproject data
-        data = data or self.dm.data
+        data = self.dm.data if data is None else data
         data = data.copy().to_crs(config["crs"])
 
         # Create figure
