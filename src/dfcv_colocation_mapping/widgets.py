@@ -1,7 +1,6 @@
 import os
 import logging
 import matplotlib.pyplot as plt
-from dfcv_colocation_mapping import data_utils
 
 import ipywidgets as widgets
 from IPython.display import display, clear_output

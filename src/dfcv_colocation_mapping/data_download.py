@@ -41,7 +41,7 @@ import osmnx as ox
 from dtmapi import DTMApi
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from src.dfcv_colocation_mapping import common_utils
+from dfcv_colocation_mapping import common_utils
 
 pd.set_option("future.no_silent_downcasting", True)
 simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
