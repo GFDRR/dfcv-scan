@@ -257,6 +257,7 @@ assets_alias:
     worldcover_cropland: "Cropland Area"
     bem: "Building Valuation"
     worldpop: "Population"
+    landscan: "Population"
 
 hazards_alias:
     coastal_defended_fathom: "Coastal Flood"
@@ -276,28 +277,29 @@ legend_titles:
     disorder_type: "ACLED Conflict Disorder Type"
     event_type: "ACLED Conflict Event Type"
     sub_event_type: "ACLED Conflict Sub-event Type"
-    disaster_idp_total: "Number of IDPs \nfrom Disasters"
-    conflict_idp_total: "Number of IDPs \nfrom Conflicts"
+    disaster_idp_total: "Number of IDPs \n from Disasters"
+    conflict_idp_total: "Number of IDPs \n from Conflicts"
     idp_total: "Total number of IDPs"
     idp_mean: "Average number of IDPs"
     osm_category: "OSM Category"
     total_conflict_count: "Number of conflict events"
-    conflict_count: "Number of conflict events \naffecting {}"
+    conflict_count: "Number of conflict events \n affecting {}"
     fatalities_per_conflict: "Number of fatalities per conflict"
     fatalities: "Number of fatalities"
-    intensity_weighted_exposure_relative: "Intensity-weighted Relative \n{} Exposure Score"
-    intensity_weighted_exposure: "Intensity-weighted \n{} Exposure Score"
-    mhs: "{} \n{} Exposure Score"
-    exposure_relative: "Proportion of {} \nexposed to {}"
-    exposure: "{} exposed \nto {}"
-    landslide_earthquake: "Mean Average Annual Frequency \nof Earthquake-triggered Landslide"
-    landslide_precip: "Mean Average Annual Frequency \nof Precipitation-triggered Landslide"
-    earthquake: "Peak Ground \nAcceleration (PGA)"
+    intensity_weighted_exposure_relative: "Intensity-weighted Relative \n {} Exposure Score"
+    intensity_weighted_exposure: "Intensity-weighted \n {} Exposure Score"
+    mhs: "{} \n {} Exposure Score"
+    exposure_relative: "Proportion of {} \n exposed to {}"
+    exposure: "{} exposed \n to {}"
+    landslide_earthquake: "Mean Average Annual Frequency \n of Earthquake-triggered Landslide"
+    landslide_precip: "Mean Average Annual Frequency \n of Precipitation-triggered Landslide"
+    earthquake: "Peak Ground \n Acceleration (PGA)"
     cyclone: "Windspeed"
     worldcover_builtup: "Built-up Area"
     worldcover_cropland: "Crop Land Area"
     bem: "Building Valuation"
     worldpop: "Population"
+    landscan: "Population"
 
 
 var_titles:
@@ -317,6 +319,7 @@ var_titles:
     worldcover_cropland: "Crop Land Area"
     bem: "Building Valuation"
     worldpop: "Population"
+    landscan: "Population"
 
     
 annotations:
@@ -342,3 +345,4 @@ annotations:
     worldpop: "WorldPop (www.worldpop.org - University of Southampton, 2018)"
     acled: "Conflict data from Armed Conflict Location & Event Data Project (ACLED)"
     ucdp: "Conflict data from UCDP (Sundberg, Ralph, and Erik Melander, 2013)"
+    landscan: "LandScan 2024 from Oak Ridge National Laboratory (Lebakula, et al., 2024)"

@@ -1,34 +1,16 @@
 assets_selected:
     - 'worldpop'
-    
-assets_all:
-    - 'worldpop'
-    - 'global_landscan'
     - 'worldcover_builtup'
-    - 'worldcover_cropland'
     - 'global_bem'
     
 osm_selected:
-    - 'pois'
-    - 'networks'
-    
-osm_all:
     - 'pois'
     - 'networks'
 
 conflict_selected:
     - 'acled'
 
-conflict_all:
-    - 'acled'
-    - 'ucdp'
-
-displacement_selected:
-    - 'iom_dtm'
-    - 'idmc_gidd'
-    - 'unhcr'
-
-displacement_all:
+displacement_selected: 
     - 'iom_dtm'
     - 'idmc_gidd'
     - 'unhcr'
@@ -41,11 +23,30 @@ hazards_selected:
     - 'global_drought_spei'
     - 'global_heat_stress'
     - 'global_wildfire_geos5'
-    - 'fluvial_defended_fathom'
-    - 'pluvial_defended_fathom'
-    - 'coastal_defended_fathom'
+    - 'global_fluvial_flood_cdri'
 
-hazards_all: # https://doc.emdat.be/docs/data-structure-and-content/glossary/
+assets_all:
+    - 'worldpop'
+    - 'global_landscan'
+    - 'worldcover_builtup'
+    - 'worldcover_cropland'
+    - 'global_bem'
+    
+osm_all:
+    - 'pois'
+    - 'networks'
+
+conflict_all:
+    - 'acled'
+    - 'ucdp'
+
+displacement_all:
+    - 'iom_dtm'
+    - 'idmc_gidd'
+    - 'unhcr'
+
+# https://doc.emdat.be/docs/data-structure-and-content/glossary/
+hazards_all: 
     hydrological:
         - 'global_fluvial_flood_cdri'
         - 'global_fluvial_flood_jrc1'
@@ -67,6 +68,16 @@ hazards_all: # https://doc.emdat.be/docs/data-structure-and-content/glossary/
         - 'global_wildfire_geos5'
         - 'global_wildfire_gwis'
         - 'global_wildfire_gabam'
+
+asset_categories:
+    population:
+        - 'worldpop'
+        - 'landscan'
+    infrastructure:
+        - 'worldcover_builtup'
+        - 'bem'
+    agriculture:
+        - 'worldcover_cropland'
 
 country_map_code:
     COD: "Democratic Republic of Congo"
@@ -127,6 +138,8 @@ urls:
     gbhumanitarian_url: "https://www.geoboundaries.org/api/current/gbHumanitarian/"
     # Source: https://www.geoboundaries.org/
     gbopen_url: "https://www.geoboundaries.org/api/current/gbOpen/"
+    # Source: 
+    # Codes: https://gis.unhcr.org/arcgis/rest/services/core_v2/wrl_prp_p_unhcr_ALL/MapServer/0?f=pjson
     unhcr_url: "https://gis.unhcr.org/arcgis/rest/services/core_v2/wrl_prp_p_unhcr_ALL/FeatureServer/0/query"
     # Source: https://hub.worldpop.org/geodata/listing?id=69
     worldpop_url: "https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/{}/{}_ppp_2020_UNadj.tif"
@@ -134,6 +147,8 @@ urls:
     worldcover_url: "https://esa-worldcover.s3.eu-central-1.amazonaws.com"
     # Source: https://helix-tools-api.idmcdb.org/external-api/?#/GIDD/gidd_disaggregations_disaggregation_geojson_retrieve
     idmc_gidd_url: "https://helix-tools-api.idmcdb.org/external-api/gidd/disaggregations/disaggregation-geojson/?client_id={}&release_environment=RELEASE&iso3__in={}&cause={}"
+    # Source: https://www.chc.ucsb.edu/data/chirps3
+    global_rainfall_url: "https://data.chc.ucsb.edu/products/CHIRPS/v3.0/annual/global/tifs/chirps-v3.0.2024.tif"
     # Source: https://giri.unepgrid.ch/map?view=MX-B7WR7-ZLQO2-J5OMQ&list=explore
     global_bem_url: "https://hazards-data.unepgrid.ch/bem_5x5_valfis.tif"
     # Source: https://data.naturalcapitalproject.stanford.edu/dataset/sts-48373e687cf175d436957b3d71f36d8f2e628675861383125519d0cbd0326759?utm_source=chatgpt.com

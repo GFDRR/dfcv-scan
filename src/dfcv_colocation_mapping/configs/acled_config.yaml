@@ -1,5 +1,5 @@
 acled_selected:
-    worldcover_cropland: 
+    agriculture: 
         "Political violence":
             "Battles":
                 - "Government regains territory"
@@ -13,7 +13,7 @@ acled_selected:
                 - "Remote explosive/landmine/IED"
                 - "Grenade"        
                 
-    worldcover_builtup: 
+    infrastructure: 
         "Political violence":
             "Battles":
                 - "Government regains territory"
@@ -35,29 +35,7 @@ acled_selected:
             "Strategic developments":
                 - "Looting/property destruction"
                 
-    bem: 
-        "Political violence":
-            "Battles":
-                - "Government regains territory"
-                - "Non-state actor overtakes territory"
-                - "Armed clash"
-            "Explosions/Remote violence":
-                - "Chemical weapon"
-                - "Air/drone strike"
-                - "Suicide bomb"
-                - "Shelling/artillery/missile attack"
-                - "Remote explosive/landmine/IED"
-                - "Grenade"
-            "Riots":
-                - "Mob violence"           
-        "Demonstrations":
-            "Riots":
-                - "Violent demonstration"
-        "Strategic developments":
-            "Strategic developments":
-                - "Looting/property destruction"
-                
-    worldpop:
+    population:
         "Political violence":
             "Battles":
                 - "Government regains territory"
