@@ -1,112 +1,53 @@
 import os
 import logging
 import matplotlib.pyplot as plt
-from IPython.display import clear_output
 from dfcv_colocation_mapping import data_utils
 
 import ipywidgets as widgets
-from IPython.display import display
+from IPython.display import display, clear_output
 
 
-class HierarchicalCheckboxes:
-    def __init__(
-        self,
-        asset_name,
-        hierarchy,
-        indent_per_level=20,
-        selected_hierarchy=None,
-        save_callback=None,
-        save_label="Save Selection",
-    ):
-        self.controls_container = widgets.VBox([])
-        self.asset_name = asset_name
-        self.hierarchy = hierarchy
-        self.selected_hierarchy = selected_hierarchy or {}
-        self.indent_per_level = indent_per_level
-        self.save_callback = save_callback
-        self.save_label = save_label
+class BaseCheckboxWidget:
+    """Base class providing common UI helpers for checkbox-based widgets."""
 
-        self.category_checkboxes = {}
-        self.subtype_checkboxes = {}
-        self.option_checkboxes = {}
-        self.updating = {"lock": False}
-        self.widgets_tree = []
+    def _make_checkbox(self, description, value=False, indent=0):
+        """
+        Create a styled checkbox widget.
 
-        self._build_ui()
-        self._apply_selection(self.selected_hierarchy)
-        self._add_save_button()
+        Args:
+            description (str): Text label displayed next to the checkbox.
+            value (bool, optional): Initial checked state. Defaults to False.
+            indent (int, optional): Left margin in pixels used to visually
+                indent the checkbox. Defaults to 0.
 
-        title_label = widgets.HTML(
-            f"<b style='font-size:16px'>{self.asset_name}</b>"
-        )
+        Returns:
+            widgets.Checkbox: An ipywidgets Checkbox instance with
+            predefined layout and styling.
+        """
 
-        self.widget = widgets.VBox(
-            [title_label] + self.widgets_tree,
-            layout=widgets.Layout(margin="0", padding="0", width="auto"),
-        )
-
-    def _make_checkbox(self, description, indent=0):
-        """Helper to create checkboxes with consistent styling and wrapping text."""
         return widgets.Checkbox(
-            value=False,
+            value=value,
             description=description,
-            layout=widgets.Layout(
-                width="auto",
-                margin=f"0 0 0 {indent}px",
-                padding="0",
-            ),
+            layout=widgets.Layout(width="auto", margin=f"0 0 0 {indent}px"),
             style={"description_width": "initial"},
         )
 
-    def _build_ui(self):
-        """Build the nested checkbox hierarchy with consistent indentation."""
-        for cat, subtypes in self.hierarchy.items():
-            cat_cb = self._make_checkbox(cat)
-            self.category_checkboxes[cat] = cat_cb
-            subtype_boxes = []
+    def _add_save_button(self, label, callback):
+        """
+        Create a save button that triggers a callback with the current selection.
 
-            for sub, options in subtypes.items():
-                sub_cb = self._make_checkbox(sub, indent=self.indent_per_level)
-                self.subtype_checkboxes.setdefault(cat, {})[sub] = sub_cb
+        Args:
+            label (str): Text displayed on the save button.
+            callback (callable): Function to be called with the current
+                selection. If not callable, a message is shown instead.
 
-                opt_widgets = [
-                    self._make_checkbox(o, indent=2 * self.indent_per_level)
-                    for o in options
-                ]
-                self.option_checkboxes.setdefault(cat, {})[sub] = opt_widgets
+        Returns:
+            widgets.VBox: A vertical container holding the save button
+            and an output area for status messages.
+        """
 
-                sub_box = widgets.VBox(
-                    [sub_cb] + opt_widgets,
-                    layout=widgets.Layout(margin="0", padding="0"),
-                )
-                subtype_boxes.append(sub_box)
-
-                sub_cb.observe(
-                    lambda ch, c=cat, s=sub: self._on_subtype_change(ch, c, s),
-                    names="value",
-                )
-                for opt in opt_widgets:
-                    opt.observe(
-                        lambda ch, c=cat, s=sub, o=opt: self._on_option_change(
-                            ch, c, s, o
-                        ),
-                        names="value",
-                    )
-
-            cat_box = widgets.VBox(
-                [cat_cb] + subtype_boxes,
-                layout=widgets.Layout(margin="0", padding="0"),
-            )
-            cat_cb.observe(
-                lambda ch, c=cat: self._on_category_change(ch, c),
-                names="value",
-            )
-            self.widgets_tree.append(cat_box)
-
-    def _add_save_button(self):
-        """Add a Save button at the bottom of the widget."""
         button = widgets.Button(
-            description=self.save_label,
+            description=label,
             button_style="success",
             icon="save",
             layout=widgets.Layout(width="200px", margin="10px 0 0 0"),
@@ -114,156 +55,328 @@ class HierarchicalCheckboxes:
         output = widgets.Output()
 
         def on_click(b):
+            """Handle save button click events."""
             with output:
                 output.clear_output()
-                result = self.get_selected()
-                if callable(self.save_callback):
-                    self.save_callback(result)
+                selection = self.get_selection()
+                if callable(callback):
+                    callback(selection)
                     print("✅ Selection saved.")
                 else:
                     print("ℹ️ No save callback provided.")
 
         button.on_click(on_click)
-        self.widgets_tree.append(widgets.VBox([button]))
-        self.widgets_tree.append(output)
 
-    def _on_category_change(self, change, category):
-        """When category toggled, set all subtypes and options."""
-        if self.updating["lock"]:
+        return widgets.VBox([button, output])
+
+
+class HierarchicalCheckboxes(BaseCheckboxWidget):
+    """Widget for displaying and managing hierarchical checkbox selections."""
+
+    def __init__(
+        self,
+        asset_category,
+        hierarchy,
+        selected=None,
+        save_callback=None,
+        indent_per_level=20,
+        save_label="Save Selection",
+    ):
+        """
+        Initialize the hierarchical checkbox widget.
+
+        Args:
+            asset_category (str): High-level label displayed as the widget title.
+            hierarchy (dict): Nested dictionary defining the checkbox hierarchy
+                in the form {category: {subcat: [options]}}.
+            indent_per_level (int, optional): Pixel indentation per hierarchy
+                level. Defaults to 20.
+            selected_hierarchy (dict, optional): Preselected values structured
+                like the hierarchy input. Defaults to None.
+            save_callback (callable, optional): Function called with the current
+                selection when the save button is clicked.
+            save_label (str, optional): Label for the save button.
+        """
+
+        self.asset_category = asset_category
+        self.hierarchy = hierarchy
+        self.selected = selected or {}
+        self.indent_per_level = indent_per_level
+        self.save_callback = save_callback
+        self.save_label = save_label
+
+        # Store checkbox references for state management
+        self.cat_checkboxes = {}
+        self.subcat_checkboxes = {}
+        self.option_checkboxes = {}
+
+        # Prevent recursive updates when syncing checkbox states
+        self._lock = False
+
+        # Build UI and apply initial selection
+        body = self._build_ui()
+        self._apply_selection(self.selected)
+        save_box = self._add_save_button(save_label, save_callback)
+
+        # Widget title
+        title = widgets.HTML(
+            f"<b style='font-size:16px'>{asset_category.title()}</b>"
+        )
+        self.widget = widgets.VBox([title, body, save_box])
+
+    def _build_ui(self):
+        """
+        Construct the hierarchical checkbox UI.
+
+        Returns:
+            widgets.VBox: Container holding all category, subcat,
+            and option checkboxes.
+        """
+
+        rows = []
+
+        for cat, subcats in self.hierarchy.items():
+            # Top-level category checkbox
+            cat_checkbox = self._make_checkbox(cat)
+            self.cat_checkboxes[cat] = cat_checkbox
+            self.subcat_checkboxes.setdefault(cat, {})
+            self.option_checkboxes.setdefault(cat, {})
+
+            subcat_boxes = []
+            for subcat, options in subcats.items():
+                # subcat checkbox
+                subcat_checkbox = self._make_checkbox(
+                    subcat, indent=self.indent_per_level
+                )
+                self.subcat_checkboxes[cat][subcat] = subcat_checkbox
+
+                # Option-level checkboxes
+                option_checkboxes = [
+                    self._make_checkbox(
+                        option, indent=2 * self.indent_per_level
+                    )
+                    for option in options
+                ]
+                self.option_checkboxes[cat][subcat] = option_checkboxes
+
+                # Attach subcat and option callbacks
+                subcat_checkbox.observe(
+                    lambda change, cat=cat, subcat=subcat: self._on_subcategory_change(
+                        change, cat, subcat
+                    ),
+                    names="value",
+                )
+                for checkbox in option_checkboxes:
+                    checkbox.observe(
+                        lambda change, cat=cat, subcat=subcat, checkbox=checkbox: self._on_option_change(
+                            change, cat, subcat, checkbox
+                        ),
+                        names="value",
+                    )
+
+                subcat_boxes.append(
+                    widgets.VBox([subcat_checkbox] + option_checkboxes)
+                )
+
+            # Attach category-level callback
+            cat_checkbox.observe(
+                lambda change, cat=cat: self._on_category_change(change, cat),
+                names="value",
+            )
+
+            rows.append(widgets.VBox([cat_checkbox] + subcat_boxes))
+
+        return widgets.VBox(rows)
+
+    def _apply_selection(self, selection):
+        """
+        Apply a preselected hierarchy to the widget.
+
+        Args:
+            selection (dict): Nested dictionary matching the hierarchy
+                structure, specifying which options should be checked.
+        """
+        # Disable callbacks during bulk updates
+        self._lock = True
+
+        for cat, subcats in selection.items():
+            if cat in self.cat_checkboxes:
+                self.cat_checkboxes[cat].value = True
+
+            for subcat, options in subcats.items():
+                if subcat in self.subcat_checkboxes.get(cat, {}):
+                    self.subcat_checkboxes[cat][subcat].value = True
+
+                for option_checkbox in self.option_checkboxes.get(cat, {}).get(
+                    subcat, []
+                ):
+                    if option_checkbox.description in options:
+                        option_checkbox.value = True
+
+        self._lock = False
+
+    def _on_category_change(self, change, cat):
+        """
+        Handle category checkbox changes.
+
+        Selecting or deselecting a category propagates the state
+        to all its subcats and options.
+        """
+
+        if self._lock or change["name"] != "value":
             return
-        if change["name"] == "value":
-            self.updating["lock"] = True
-            for sub, sub_cb in self.subtype_checkboxes[category].items():
-                sub_cb.value = change["new"]
-                for opt in self.option_checkboxes[category][sub]:
-                    opt.value = change["new"]
-            self.updating["lock"] = False
 
-    def _on_subtype_change(self, change, category, subtype):
-        """When subtype toggled, set all options under it (but not the category)."""
-        if self.updating["lock"]:
+        self._lock = True
+
+        new = change["new"]
+        for subcat, subcat_checkbox in self.subcat_checkboxes[cat].items():
+            subcat_checkbox.value = new
+            for option in self.option_checkboxes[cat][subcat]:
+                option.value = new
+
+        self._lock = False
+
+    def _on_subcategory_change(self, change, cat, subcat):
+        """
+        Handle subcategory checkbox changes.
+
+        Selecting or deselecting a subcat propagates the state
+        to all its options.
+        """
+
+        if self._lock or change["name"] != "value":
             return
-        if change["name"] == "value":
-            self.updating["lock"] = True
-            for opt in self.option_checkboxes[category][subtype]:
-                opt.value = change["new"]
-            self.updating["lock"] = False
 
-    def _on_option_change(self, change, category, subtype, option):
-        """Don't affect parents — just the individual checkbox."""
-        if self.updating["lock"]:
+        self._lock = True
+
+        new = change["new"]
+        for opt in self.option_checkboxes[cat][subcat]:
+            opt.value = new
+        self._lock = False
+
+    def _on_option_change(self, change, cat, subcat, option):
+        """
+        Handle option checkbox changes.
+
+        This method currently acts as a placeholder for future
+        upward-propagation logic.
+        """
+        if self._lock:
             return
-        return
 
-    def _apply_selection(self, selected_hierarchy):
-        """Set checkbox states based on a provided filtered hierarchy."""
-        self.updating["lock"] = True
-        for cat, subtypes in self.hierarchy.items():
-            if cat not in selected_hierarchy:
-                continue
-            self.category_checkboxes[cat].value = True
-            for sub, opts in subtypes.items():
-                if sub not in selected_hierarchy[cat]:
-                    continue
-                self.subtype_checkboxes[cat][sub].value = True
-                for opt in self.option_checkboxes[cat][sub]:
-                    if opt.description in selected_hierarchy[cat][sub]:
-                        opt.value = True
+    def get_selection(self):
+        """
+        Retrieve the current checkbox selection.
 
-        self.updating["lock"] = False
+        Returns:
+            dict: Nested dictionary of selected options structured
+            as {category: {subcategory: [options]}}.
+        """
 
-    def get_selected(self):
-        """Return a dict of selected options."""
         selected = {}
-        for cat, subtypes in self.option_checkboxes.items():
+        for cat, subcats in self.option_checkboxes.items():
             selected[cat] = {}
-            for sub, opts in subtypes.items():
-                sel_opts = [o.description for o in opts if o.value]
-                if sel_opts:
-                    selected[cat][sub] = sel_opts
-        selected = {c: s for c, s in selected.items() if s}
-        return selected
+            for subcat, options in subcats.items():
+                chosen = [cb.description for cb in options if cb.value]
+                if chosen:
+                    selected[cat][subcat] = chosen
+
+        return {cat: subcat for cat, subcat in selected.items() if subcat}
 
     def show(self):
+        """
+        Display the widget in a Jupyter notebook.
+        """
         display(self.widget)
 
 
-class MultiSelectorWidget:
-    def __init__(self, dataset, data_all, data_selected, save_callback=None):
-        self.dataset = dataset
-        self.data_all = data_all
-        self.data_selected = data_selected
-        self.save_callback = save_callback
+class MultiSelectorWidget(BaseCheckboxWidget):
+    """A simple widget for selecting multiple items from a list or nested dictionary."""
 
+    def __init__(self, dataset, data_all, data_selected, save_callback=None):
+        """
+        Initialize the MultiSelectorWidget.
+
+        Args:
+            dataset (str): Name of the dataset (used in widget title).
+            data_all (list or dict): All possible selectable items.
+                If a nested dictionary (for hazards), the widget will extract
+                the deepest values as the selectable options.
+            data_selected (list): List of items to pre-select.
+            save_callback (callable, optional): Function to call with the selected
+                items when the save button is clicked.
+        """
+
+        self.dataset = dataset
+
+        # If hazard dataset, flatten nested dict to a list of deepest values
         self.data_all = (
-            data_utils.get_deepest_values(self.data_all)
+            self._get_deepest_values(data_all)
             if "hazard" in dataset
             else data_all
         )
-        self.checkboxes = self._build_checkboxes(
-            self.data_all, self.data_selected
-        )
-        self.section = self._build_section(
-            dataset,
-            self.checkboxes,
-            self.data_selected,
-            f"Save {dataset} selection",
-        )
-        self.widget = widgets.VBox([self.section])
+        self.data_selected = data_selected
+        self.save_callback = save_callback
 
-    def _build_checkboxes(self, items, selected):
-        """Create a list of checkboxes for a list of strings."""
-        checkboxes = []
-        for item in items:
-            cb = widgets.Checkbox(
-                value=item in selected,
-                description=item,
-                layout=widgets.Layout(width="auto"),
-                style={"description_width": "initial"},
-            )
-            checkboxes.append(cb)
-        return checkboxes
-
-    def _build_section(self, title, checkboxes, data_selected, button_label):
-        """Build a titled section with checkboxes and a save button."""
-        title_label = widgets.HTML(
-            f"<b style='font-size:16px'>{title.upper()}</b>"
+        # Build UI and save button
+        body = self._build_ui()
+        save_box = self._add_save_button(
+            f"Save {dataset} selection", save_callback
         )
 
-        save_button = widgets.Button(
-            description=button_label,
-            button_style="success",
-            icon="save",
-            layout=widgets.Layout(width="200px", margin="10px 0 0 0"),
+        # Widget title
+        title = widgets.HTML(
+            f"<b style='font-size:16px'>{dataset.upper()}</b>"
         )
+        self.widget = widgets.VBox([title, body, save_box])
 
-        output = widgets.Output()
+    def _build_ui(self):
+        """
+        Build the main checkbox list for the widget.
 
-        def on_click(b):
-            with output:
-                output.clear_output()
-                selected = self.get_selected()
-                if callable(self.save_callback):
-                    self.save_callback(selected)
-                    print(f"✅ {title.upper()} selection saved.")
+        Returns:
+            ipywidgets.VBox: A vertical box containing all checkboxes.
+        """
 
-        save_button.on_click(on_click)
+        self.checkboxes = [
+            self._make_checkbox(item, value=item in self.data_selected)
+            for item in self.data_all
+        ]
+        return widgets.VBox(self.checkboxes, layout=widgets.Layout(margin="0"))
 
-        section = widgets.VBox(
-            [
-                title_label,
-                widgets.VBox(checkboxes, layout=widgets.Layout(margin="0")),
-                widgets.HBox([save_button]),
-                output,
-            ],
-            layout=widgets.Layout(margin="0 0 10px 0"),
-        )
-        return section
+    def _get_deepest_values(self, dictionary):
+        """
+        Recursively extract the deepest values from a nested dictionary.
 
-    def get_selected(self):
+        Args:
+            dictionary (dict): Nested dictionary.
+
+        Returns:
+            list: Flattened list of the deepest values.
+        """
+
+        deepest_values = []
+        for value in dictionary.values():
+            if isinstance(value, dict):
+                deepest_values.extend(self._get_deepest_values(value))
+            else:
+                deepest_values.extend(value)
+        return deepest_values
+
+    def get_selection(self):
+        """
+        Get the currently selected items.
+
+        Returns:
+            list: Descriptions of the checkboxes that are checked.
+        """
+
         return [cb.description for cb in self.checkboxes if cb.value]
 
     def show(self):
+        """
+        Display the widget in a Jupyter notebook.
+        """
         display(self.widget)
 
 
@@ -273,56 +386,129 @@ class MapWidget:
         geoplot,
         map_mode: str = "choropleth",
         var_list: list = None,
-        default_var: str = None,
         var_label: str = "Variable:",
-        enable_conflict: bool = False,
-        enable_conflict_exposure: bool = False,
-        enable_hazard_exposure: bool = False,
-        enable_mhs_exposure: bool = False,
-        out_dir: str = "",
+        zoom_to_region: bool = False,
+        overwrite_titles: bool = False,
+        plot_displacement: bool = False,
+        plot_displacement_points: bool = False,
+        plot_conflict: bool = False,
+        plot_conflict_points: bool = False,
+        plot_conflict_exposure: bool = False,
+        plot_hazard_exposure: bool = False,
+        plot_mhs_exposure: bool = False,
+        plot_osm_points: bool = False,
+        plot_osm_networks: bool = False,
+        out_dir: str = None,
     ):
+        """
+        Initialize a MapWidget for interactive mapping and data visualization.
+
+        Args:
+            geoplot: Geoplot object containing the data manager and datasets.
+            map_mode (str): Map display mode (default: "choropleth").
+            var_list (list, optional): List of variables to choose from.
+            var_label (str): Label for the variable dropdown (default: "Variable:").
+            zoom_to_region (bool): Whether to zoom map to selected region (default: False).
+            overwrite_titles (bool): Allow overwriting default titles (default: False).
+            plot_displacement (bool): Include displacement data (default: False).
+            plot_displacement_points (bool): Include IDP points (default: False).
+            plot_conflict (bool): Include conflict data (default: False).
+            plot_conflict_points (bool): Include conflict points (default: False).
+            plot_conflict_exposure (bool): Include conflict exposure map (default: False).
+            plot_hazard_exposure (bool): Include hazard exposure map (default: False).
+            plot_mhs_exposure (bool): Include multi-hazard exposure map (default: False).
+            plot_osm_points (bool): Include OpenStreetMap point data (default: False).
+            plot_osm_networks (bool): Include OpenStreetMap network data (default: False).
+            out_dir (str, optional): Output directory for saving plots.
+        """
+
         self.geoplot = geoplot
-        self.var_list = var_list
-        self.default_var = default_var
-        self.var_label = var_label
-        self.output = widgets.Output()
-        self.last_vars = []
-        self.save_suffixes = ""
-        self.out_dir = self.geoplot.dm.iso_code + "_" + out_dir
-
-        self.enable_conflict = enable_conflict
-        self.enable_conflict_exposure = enable_conflict_exposure
-        self.enable_hazard_exposure = enable_hazard_exposure
-        self.enable_mhs_exposure = enable_mhs_exposure
         self.map_mode = map_mode
-
         self.var_list = var_list or self.geoplot.dm.data.columns
-        self.all_var_list = self.geoplot.dm.data.columns
+        self.var_label = var_label
+        self.overwrite_titles = overwrite_titles
+        self.zoom_to_region = zoom_to_region
+        self.plot_displacement = plot_displacement
+        self.plot_displacement_points = plot_displacement_points
+        self.plot_conflict = plot_conflict
+        self.plot_conflict_points = plot_conflict_points
+        self.plot_conflict_exposure = plot_conflict_exposure
+        self.plot_hazard_exposure = plot_hazard_exposure
+        self.plot_mhs_exposure = plot_mhs_exposure
+        self.plot_osm_points = plot_osm_points
+        self.plot_osm_networks = plot_osm_networks
+        self.out_dir = self._get_out_dir(out_dir)
 
-        self.map_title = widgets.Text(
-            value=None,
-            description="Title:",  # Label for the text box
-        )
-        self.map_subtitle = widgets.Text(
-            value=None,
-            description="Subtitle:",  # Label for the text box
-        )
+        self.last_vars = []
+        self.output = widgets.Output()
 
-        # Choropleth
-        self.variable_dropdown = widgets.Dropdown(
+        # Initialize all the internal state
+        self._setup_var_list()
+        self._setup_adm_options()
+        self._setup_exposure_options()
+
+        # Create widgets
+        self._create_dropdowns()
+        self._create_sliders()
+        self._create_buttons()
+
+        if self.geoplot.dm.config["osm_selected"]:
+            self._create_osm_selectors()
+
+        # Build final UI
+        self._build_ui()
+
+    def _setup_var_list(self):
+        """Filter and set the default variable list based on the map mode."""
+        if self.plot_displacement:
+            self.var_list = [
+                var for var in self.var_list if "dtm" in var or "idmc" in var
+            ]
+        self.default_var = self.var_list[0]
+
+    def _setup_adm_options(self):
+        """Prepare ADM levels and region options for dropdowns."""
+        self.adm_options = [
+            col
+            for col in self.geoplot.dm.data.columns
+            if "ADM" in col and "ID" not in col
+        ][::-1]
+        self.adm_region_options = self._get_adm_options(self.adm_options[0])
+
+    def _setup_exposure_options(self):
+        """Set hazard and conflict exposure options."""
+        self.hazard_exposure_options = self.geoplot.dm.config["suffixes"]
+        self.conflict_exposure_options = self.hazard_exposure_options[:-1]
+        self.conflict_exposure_sources = self.geoplot.dm.config[
+            "conflict_columns"
+        ]
+
+    def _create_dropdowns(self):
+        """Create all dropdown and text widgets."""
+
+        self.var_dropdown = widgets.Dropdown(
             options=self.var_list,
             value=self.default_var,
             description=self.var_label,
         )
-        self.all_variable_dropdown = widgets.Dropdown(
-            options=self.all_var_list,
-            value=self.default_var,
-            description=self.var_label,
+        self.asset = widgets.Dropdown(
+            options=self.geoplot.dm.asset_names,
+            value="worldpop",
+            description="Asset:",
+        )
+
+        self.map_title = widgets.Text(
+            value=None,
+            description="Title:",
+        )
+        self.map_subtitle = widgets.Text(
+            value=None,
+            description="Subtitle:",
         )
 
         self.legend_type = widgets.Dropdown(
-            options=["default", "colorbar", "barplot"],
-            value="colorbar",
+            options=["bins", "colorbar", "barplot"],
+            value="bins",
             description="Legend:",
         )
 
@@ -332,28 +518,20 @@ class MapWidget:
             description="Binning:",
         )
 
-        self.var_bounds_selector = widgets.Dropdown(
+        self.var_bounds = widgets.Dropdown(
             options=["[0, 1]", "[min, max]"],
             value="[min, max]",
             description="Bounds:",
         )
 
-        self.asset = widgets.Dropdown(
-            options=geoplot.dm.asset_names,
-            value="worldpop",
-            description="Asset:",
-        )
-
-        hazard_exposure_options = self.geoplot.dm.config["suffixes"]
         self.hazard_exposure_type = widgets.Dropdown(
-            options=hazard_exposure_options,
+            options=self.hazard_exposure_options,
             value="exposure_relative",
             description="Hazard exposure:",
         )
 
-        conflict_exposure_options = hazard_exposure_options[:-1]
         self.conflict_exposure_type = widgets.Dropdown(
-            options=conflict_exposure_options,
+            options=self.conflict_exposure_options,
             value="exposure_relative",
             description="Conflict exposure:",
         )
@@ -371,19 +549,25 @@ class MapWidget:
             value="conflict_count",
             description="Column:",
         )
-        conflict_exposure_sources = self.geoplot.dm.config["conflict_columns"]
+
         self.conflict_exposure_source = widgets.Dropdown(
-            options=conflict_exposure_sources,
-            value=conflict_exposure_sources[0],
+            options=self.conflict_exposure_sources,
+            value=self.conflict_exposure_sources[0],
             description="Conflict data:",
         )
 
         self.hazard_exposure_source = widgets.Dropdown(
-            options=geoplot.dm.hazard_names,
-            value=geoplot.dm.hazard_names[0],
+            options=self.geoplot.dm.hazard_names,
+            value=self.geoplot.dm.hazard_names[0],
             description="Hazard:",
         )
 
+        self.hazard_category = widgets.Dropdown(
+            options=["all"]
+            + list(self.geoplot.dm.config["hazards_all"].keys()),
+            value="all",
+            description="MHS category:",
+        )
         self.mhs_aggregation = widgets.Dropdown(
             options=[
                 "arithmetic_mean",
@@ -393,33 +577,18 @@ class MapWidget:
             value="arithmetic_mean",
             description="MHS aggregation:",
         )
-        self.hazard_category = widgets.Dropdown(
-            options=["all"] + list(geoplot.dm.config["hazards_all"].keys()),
-            value="all",
-            description="MHS category:",
-        )
 
-        self.zoom_to_region = widgets.Checkbox(
-            value=False,
-            description="Zoom to region",
-        )
-
-        adm_options = [col for col in geoplot.dm.data.columns if "ADM" in col]
         self.adm_level = widgets.Dropdown(
-            options=adm_options,
-            value=adm_options[0],
+            options=self.adm_options,
+            value=self.adm_options[0],
             description="ADM Level:",
         )
 
         self.adm_string = widgets.Dropdown(
-            options=self._get_adm_options(adm_options[0]),
+            options=self.adm_region_options,
             description="Region:",
         )
 
-        self.overlay_conflict_points = widgets.Checkbox(
-            value=False,
-            description="Overlay conflict points",
-        )
         self.conflict_points = widgets.Dropdown(
             options=["ACLED", "UCDP"],
             value="ACLED",
@@ -441,7 +610,6 @@ class MapWidget:
             "ACLED": ["disorder_type", "event_type", "sub_event_type"],
             "UCDP": ["type_of_violence"],
         }
-
         self.conflict_points.observe(
             self._on_conflict_points_source_change, names="value"
         )
@@ -449,43 +617,6 @@ class MapWidget:
             {"new": self.conflict_points.value}
         )
 
-        self.conflict_markerscale = widgets.FloatSlider(
-            value=10,
-            min=1,
-            max=500,
-            step=1,
-            description="Marker size:",
-            continuous_update=False,
-        )
-        self.conflict_alpha = widgets.FloatSlider(
-            value=0.7,
-            min=0.1,
-            max=1.0,
-            step=0.05,
-            description="Transparency:",
-            continuous_update=False,
-        )
-        self.conflict_legend1_y = widgets.FloatSlider(
-            value=0.30,
-            min=0.0,
-            max=1.0,
-            step=0.025,
-            description="Legend 1 Y:",
-            continuous_update=False,
-        )
-        self.conflict_legend2_y = widgets.FloatSlider(
-            value=0.20,
-            min=0.0,
-            max=1.0,
-            step=0.025,
-            description="Legend 2 Y:",
-            continuous_update=False,
-        )
-
-        self.overlay_idp_points = widgets.Checkbox(
-            value=False,
-            description="Overlay IDP data",
-        )
         self.idp_points = widgets.Dropdown(
             options=[
                 "idmc_gidd_combined",
@@ -520,12 +651,49 @@ class MapWidget:
             ],
             "idmc_gidd_conflict": ["Violence type"],
         }
-
         self.idp_points.observe(
             self._on_idp_points_source_change, names="value"
         )
         self._on_idp_points_source_change({"new": self.idp_points.value})
 
+    def _create_sliders(self):
+        """Create sliders for markers, transparency, and legend positions."""
+
+        # Conflicts
+        self.conflict_markerscale = widgets.FloatSlider(
+            value=10,
+            min=1,
+            max=500,
+            step=1,
+            description="Marker size:",
+            continuous_update=False,
+        )
+        self.conflict_alpha = widgets.FloatSlider(
+            value=0.7,
+            min=0.1,
+            max=1.0,
+            step=0.05,
+            description="Transparency:",
+            continuous_update=False,
+        )
+        self.conflict_legend1_y = widgets.FloatSlider(
+            value=0.30,
+            min=0.0,
+            max=1.0,
+            step=0.025,
+            description="Legend 1 Y:",
+            continuous_update=False,
+        )
+        self.conflict_legend2_y = widgets.FloatSlider(
+            value=0.20,
+            min=0.0,
+            max=1.0,
+            step=0.025,
+            description="Legend 2 Y:",
+            continuous_update=False,
+        )
+
+        # IDPs
         self.idp_markerscale = widgets.FloatSlider(
             value=10,
             min=1,
@@ -559,93 +727,40 @@ class MapWidget:
             continuous_update=False,
         )
 
-        if len(self.geoplot.dm.config["osm_selected"]) > 0:
-            self.overlay_osm_points = widgets.Checkbox(
-                value=False, description="Overlay OSM points"
-            )
-            osm_pois = [x for x in geoplot.dm.osm_pois]
-            self.osm_poi_selector = widgets.SelectMultiple(
-                options=osm_pois,
-                value=[
-                    osm_pois[0],
-                ],
-                description="OSM Points:",
-                style={"description_width": "initial"},
-                layout=widgets.Layout(width="300px", height="90px"),
-            )
-
-            self.overlay_osm_networks = widgets.Checkbox(
-                value=False, description="Overlay OSM networks"
-            )
-
-            self.osm_pois_markerscale = widgets.FloatSlider(
-                value=5,
-                min=1,
-                max=100,
-                step=1,
-                description="Marker size:",
-                continuous_update=False,
-            )
-            self.osm_pois_alpha = widgets.FloatSlider(
-                value=0.6,
-                min=0.1,
-                max=1.0,
-                step=0.05,
-                description="Transparency:",
-                continuous_update=False,
-            )
-            self.osm_pois_legend1_y = widgets.FloatSlider(
-                value=0.30,
-                min=0.0,
-                max=1.0,
-                step=0.025,
-                description="Legend Y:",
-                continuous_update=False,
-            )
-
-            osm_networks = [x for x in geoplot.dm.osm_networks]
-            self.osm_network_selector = widgets.SelectMultiple(
-                options=osm_networks,
-                value=[
-                    osm_networks[0],
-                ],
-                description="OSM Networks:",
-                style={"description_width": "initial"},
-                layout=widgets.Layout(width="300px", height="90px"),
-            )
-            self.osm_networks_alpha = widgets.FloatSlider(
-                value=0.6,
-                min=0.1,
-                max=1.0,
-                step=0.05,
-                description="Transparency:",
-                continuous_update=False,
-            )
-            self.osm_networks_legend1_y = widgets.FloatSlider(
-                value=0.20,
-                min=0.0,
-                max=1.0,
-                step=0.025,
-                description="Legend Y:",
-                continuous_update=False,
-            )
-
-        self.overlay_hatches = widgets.Checkbox(
-            value=False, description="Overlay top n by column"
+        # OSM
+        self.osm_pois_markerscale = widgets.FloatSlider(
+            value=5,
+            min=1,
+            max=100,
+            step=1,
+            description="Marker size:",
+            continuous_update=False,
         )
-        self.hatches_title = widgets.Text(
-            value="Top 5 most vulnerable townships",  # Initial value
-            description="Enter title:",  # Label for the text box
+        self.osm_pois_alpha = widgets.FloatSlider(
+            value=0.6,
+            min=0.1,
+            max=1.0,
+            step=0.05,
+            description="Transparency:",
+            continuous_update=False,
         )
-        self.hatches_legend_x = widgets.FloatSlider(
-            value=0.10,
+        self.osm_pois_legend1_y = widgets.FloatSlider(
+            value=0.30,
             min=0.0,
             max=1.0,
             step=0.025,
-            description="Legend X:",
+            description="Legend Y:",
             continuous_update=False,
         )
-        self.hatches_legend_y = widgets.FloatSlider(
+        self.osm_networks_alpha = widgets.FloatSlider(
+            value=0.6,
+            min=0.1,
+            max=1.0,
+            step=0.05,
+            description="Transparency:",
+            continuous_update=False,
+        )
+        self.osm_networks_legend1_y = widgets.FloatSlider(
             value=0.20,
             min=0.0,
             max=1.0,
@@ -653,6 +768,34 @@ class MapWidget:
             description="Legend Y:",
             continuous_update=False,
         )
+
+    def _create_osm_selectors(self):
+        """Create OSM multiple selectors"""
+
+        osm_pois = [x for x in self.geoplot.dm.osm_pois]
+        self.osm_poi_selector = widgets.SelectMultiple(
+            options=osm_pois,
+            value=[
+                osm_pois[0],
+            ],
+            description="OSM Points:",
+            style={"description_width": "initial"},
+            layout=widgets.Layout(width="300px", height="90px"),
+        )
+
+        osm_networks = [x for x in self.geoplot.dm.osm_networks]
+        self.osm_network_selector = widgets.SelectMultiple(
+            options=osm_networks,
+            value=[
+                osm_networks[0],
+            ],
+            description="OSM Networks:",
+            style={"description_width": "initial"},
+            layout=widgets.Layout(width="300px", height="90px"),
+        )
+
+    def _create_buttons(self):
+        """Create action buttons and attach callbacks."""
 
         self.run_button = widgets.Button(
             description="Plot", button_style="primary", icon="map"
@@ -666,7 +809,11 @@ class MapWidget:
         )
         self.save_button.on_click(self._on_save_click)
 
-        self._build_layout()
+    def _get_out_dir(self, name):
+        out_dir = self.geoplot.dm.iso_code
+        if name is not None:
+            out_dir = os.path.join(out_dir, name)
+        return out_dir
 
     def _on_idp_points_source_change(self, change):
         """Update available columns when the points source changes."""
@@ -702,14 +849,13 @@ class MapWidget:
             self.adm_string.value = self.adm_string.options[0]
 
     def _on_plot_click(self, _):
-        """Handle Plot button click."""
+        """Handle button click."""
         with self.output:
             clear_output(wait=True)
             existing_figs = set(plt.get_fignums())
-            self.save_suffixes = ""
 
             zoom_to = None
-            if self.zoom_to_region.value:
+            if self.zoom_to_region:
                 zoom_to = {self.adm_level.value: self.adm_string.value}
 
             title = (
@@ -724,7 +870,7 @@ class MapWidget:
             var, ax, xpos = None, None, None
             zorder = 1
             if self.map_mode == "choropleth":
-                if self.enable_conflict:
+                if self.plot_conflict:
                     if self.conflict_data_source.value.lower() == "acled":
                         var = (
                             f"{self.conflict_data_source.value.lower()}_"
@@ -735,36 +881,36 @@ class MapWidget:
                             f"{self.conflict_data_source.value.lower()}_"
                             f"total_{self.conflict_column.value}"
                         )
-                if self.enable_conflict_exposure:
+                if self.plot_conflict_exposure:
                     var = f"{self.conflict_exposure_source.value}_{self.asset.value}_{self.conflict_exposure_type.value}"
 
-                if self.enable_hazard_exposure:
+                if self.plot_hazard_exposure:
                     var = f"{self.hazard_exposure_source.value}_{self.asset.value}_{self.hazard_exposure_type.value}"
 
-                if self.enable_mhs_exposure:
+                if self.plot_mhs_exposure:
                     self.geoplot.dm.mhs_aggregation = (
                         self.mhs_aggregation.value
                     )
                     self.geoplot.dm.data = (
-                        self.geoplot.dm._calculate_multihazard_score(
+                        self.geoplot.dm.calculate_multihazard_score(
                             self.geoplot.dm.data,
                             aggregation=self.mhs_aggregation.value,
                         )
                     )
                     var = f"mhs_{self.hazard_category.value}_{self.asset.value}_{self.hazard_exposure_type.value}"
 
-                if self.enable_conflict_exposure and self.enable_mhs_exposure:
+                if self.plot_conflict_exposure and self.plot_mhs_exposure:
                     var = f"mhs_{self.hazard_category.value}_{self.conflict_exposure_source.value}_{self.asset.value}_{self.hazard_exposure_type.value}"
 
-                if self.variable_dropdown.value is not None:
-                    var = self.variable_dropdown.value
+                if var is None and self.var_dropdown.value is not None:
+                    var = self.var_dropdown.value
 
                 if var is not None:
                     logging.info(f"Plotting variable: {var}")
                     self.last_vars = [var]
 
                     var_bounds = [None, None]
-                    if self.var_bounds_selector.value == "[0, 1]":
+                    if self.var_bounds.value == "[0, 1]":
                         var_bounds = [0, 1]
 
                     # Plot the choropleth on the axes
@@ -781,7 +927,7 @@ class MapWidget:
                     zorder += 1
 
             else:
-                if self.enable_conflict:
+                if self.plot_conflict:
                     if self.conflict_data_source.value.lower() == "acled":
                         var1 = (
                             f"{self.conflict_data_source.value.lower()}_"
@@ -792,16 +938,16 @@ class MapWidget:
                             f"{self.conflict_data_source.value.lower()}_"
                             f"total_{self.conflict_column.value}"
                         )
-                elif self.enable_conflict_exposure:
+                elif self.plot_conflict_exposure:
                     var1 = f"{self.conflict_exposure_source.value}_{self.asset.value}_{self.conflict_exposure_type.value}"
 
-                if self.enable_hazard_exposure or self.enable_mhs_exposure:
-                    if self.enable_hazard_exposure:
+                if self.plot_hazard_exposure or self.plot_mhs_exposure:
+                    if self.plot_hazard_exposure:
                         var2 = f"{self.hazard_exposure_source.value}_{self.asset.value}_{self.hazard_exposure_type.value}"
 
-                    elif self.enable_mhs_exposure:
+                    elif self.plot_mhs_exposure:
                         self.geoplot.dm.data = (
-                            self.geoplot.dm._calculate_multihazard_score(
+                            self.geoplot.dm.calculate_multihazard_score(
                                 self.geoplot.dm.data,
                                 aggregation=self.mhs_aggregation.value,
                             )
@@ -816,8 +962,8 @@ class MapWidget:
                 ax, xpos = self.geoplot.plot_bivariate_choropleth(
                     var1=var1,
                     var2=var2,
-                    var1_bounds=[0, 1],
-                    var2_bounds=[0, 1],
+                    # var1_bounds=[0, 1],
+                    # var2_bounds=[0, 1],
                     title=title,
                     subtitle=subtitle,
                     binning=self.binning.value,
@@ -826,9 +972,9 @@ class MapWidget:
                 )
                 zorder += 1
 
-            if self.overlay_conflict_points.value:
+            if self.plot_conflict_points:
                 ax, xpos = self.geoplot.plot_points(
-                    self.conflict_points_column.value,
+                    column=self.conflict_points_column.value,
                     asset=self.asset.value,
                     dataset=self.conflict_points.value.lower(),
                     zoom_to=zoom_to,
@@ -847,8 +993,7 @@ class MapWidget:
                 self.last_vars.append(self.conflict_points_column.value)
                 zorder += 1
 
-            if self.overlay_idp_points.value:
-                self.save_suffixes += "-displacement"
+            if self.plot_displacement_points:
                 ax, xpos = self.geoplot.plot_points(
                     self.idp_points_column.value,
                     dataset=self.idp_points.value.lower(),
@@ -869,8 +1014,8 @@ class MapWidget:
                 self.last_vars.append(self.idp_points_column.value)
                 zorder += 1
 
-            if len(self.geoplot.dm.config["osm_selected"]) > 0:
-                if self.overlay_osm_networks.value:
+            if self.geoplot.dm.config["osm_selected"]:
+                if self.plot_osm_networks:
                     ax, xpos = self.geoplot.plot_lines(
                         "tag",
                         dataset="osm",
@@ -887,7 +1032,7 @@ class MapWidget:
                     self.last_vars.extend(self.osm_network_selector.value)
                     zorder += 1
 
-                if self.overlay_osm_points.value:
+                if self.plot_osm_points:
                     ax, xpos = self.geoplot.plot_points(
                         "tag",
                         dataset="osm",
@@ -907,23 +1052,6 @@ class MapWidget:
                     self.last_vars.extend(self.osm_poi_selector.value)
                     zorder += 1
 
-            if self.overlay_hatches.value:
-                ax, xpos = self.geoplot.plot_hatches(
-                    adm_level=self.geoplot.dm.adm_level,
-                    column=self.variable_dropdown.value,
-                    zoom_to=zoom_to,
-                    ax=ax,
-                    xpos=xpos,
-                    zorder=zorder,
-                    title=self.hatches_title.value,
-                    kwargs={
-                        "legend_x": self.hatches_legend_x.value,
-                        "legend_y": self.hatches_legend_y.value,
-                    },
-                )
-                self.last_vars.append(self.variable_dropdown.value)
-                zorder += 1
-
             # Render the figure in the notebook
             new_figs = set(plt.get_fignums()) - existing_figs
             if new_figs:
@@ -937,7 +1065,7 @@ class MapWidget:
         with self.output:
             if not self.last_vars:
                 print(
-                    "⚠️ No variables have been plotted yet. Please plot the map first."
+                    "No variables have been plotted yet. Please plot the map first."
                 )
                 return
 
@@ -949,7 +1077,7 @@ class MapWidget:
             ]
 
             region_name = self.geoplot.dm.iso_code
-            if self.zoom_to_region.value is True:
+            if self.zoom_to_region:
                 adm_col = self.adm_level.value
                 region_name = self.adm_string.value
 
@@ -1004,131 +1132,190 @@ class MapWidget:
 
             display(subset.head())
 
-    def _build_layout(self):
+    def _build_ui(self):
         """Assemble widget layout."""
 
-        titles = widgets.VBox(
-            [
-                self.map_title,
-                self.map_subtitle,
-            ]
-        )
-        controls = [widgets.HTML("<hr style='margin:10px 0'>"), titles]
-
-        zoom_box = widgets.VBox(
-            [self.zoom_to_region, self.adm_level, self.adm_string]
-        )
-        controls.extend([widgets.HTML("<hr style='margin:10px 0'>"), zoom_box])
-
-        conflict_points_box = widgets.VBox(
-            [
-                self.overlay_conflict_points,
-                self.conflict_points,
-                self.conflict_points_column,
-            ]
-        )
-        conflict_style_box = widgets.VBox(
-            [
-                self.conflict_markerscale,
-                self.conflict_alpha,
-                self.conflict_legend1_y,
-                self.conflict_legend2_y,
-            ]
-        )
-        controls.extend(
-            [
-                widgets.HTML("<hr style='margin:10px 0'>"),
+        controls = []
+        if self.map_mode == "choropleth":
+            controls = [
                 widgets.HBox(
                     [
-                        conflict_points_box,
-                        conflict_style_box,
+                        self.legend_type,
+                        self.binning,
+                        self.var_bounds,
                     ]
-                ),
+                )
             ]
-        )
 
-        idp_points_box = widgets.VBox(
-            [
-                self.overlay_idp_points,
-                self.idp_points,
-                self.idp_points_column,
-            ]
-        )
-        idp_style_box = widgets.VBox(
-            [
-                self.idp_markerscale,
-                self.idp_alpha,
-                self.idp_legend1_y,
-                self.idp_legend2_y,
-            ]
-        )
-        controls.extend(
-            [
-                widgets.HTML("<hr style='margin:10px 0'>"),
-                widgets.HBox(
+            if self.plot_conflict:
+                conflict_box = widgets.HBox(
                     [
-                        idp_points_box,
-                        idp_style_box,
+                        self.conflict_data_source,
+                        self.asset,
+                        self.conflict_column,
                     ]
-                ),
-            ]
-        )
+                )
+                controls.insert(0, conflict_box)
 
-        if len(self.geoplot.dm.config["osm_selected"]) > 0:
-            osm_pois_box = widgets.VBox(
-                [self.overlay_osm_points, self.osm_poi_selector]
+            elif (
+                self.plot_conflict_exposure
+                or self.plot_hazard_exposure
+                or self.plot_mhs_exposure
+            ):
+                controls.insert(0, self.asset)
+
+                if self.plot_hazard_exposure:
+                    box = [self.hazard_exposure_source]
+                    box.append(self.hazard_exposure_type)
+                    box = widgets.HBox(box)
+                    controls.insert(1, box)
+
+                if self.plot_mhs_exposure:
+                    box = [self.hazard_category]
+                    box.append(self.hazard_exposure_type)
+                    box.append(self.mhs_aggregation)
+                    box = widgets.HBox(box)
+                    controls.insert(1, box)
+
+                if self.plot_conflict_exposure:
+                    box = [self.conflict_exposure_source]
+                    box.append(self.conflict_exposure_type)
+                    box = widgets.HBox(box)
+                    controls.insert(1, box)
+            else:
+                controls.insert(0, self.var_dropdown)
+
+        elif self.map_mode == "bivariate_choropleth":
+            conflict_box = widgets.HBox(
+                [self.conflict_exposure_source, self.conflict_exposure_type]
             )
-            osm_pois_style_box = widgets.VBox(
+            if self.plot_hazard_exposure:
+                hazard_box = widgets.HBox(
+                    [self.hazard_exposure_source, self.hazard_exposure_type]
+                )
+            elif self.plot_mhs_exposure:
+                hazard_box = widgets.HBox(
+                    [
+                        self.hazard_category,
+                        self.hazard_exposure_type,
+                        self.mhs_aggregation,
+                    ]
+                )
+            controls = [
+                conflict_box,
+                hazard_box,
+                self.asset,
+                self.binning,
+            ] + controls
+
+        if self.overwrite_titles:
+            titles = widgets.VBox(
                 [
-                    self.osm_pois_markerscale,
-                    self.osm_pois_alpha,
-                    self.osm_pois_legend1_y,
+                    self.map_title,
+                    self.map_subtitle,
                 ]
             )
-            osm_networks_box = widgets.VBox(
-                [self.overlay_osm_networks, self.osm_network_selector]
+            controls.extend(
+                [widgets.HTML("<hr style='margin:10px 0'>"), titles]
             )
-            osm_networks_style_box = widgets.VBox(
-                [self.osm_networks_alpha, self.osm_networks_legend1_y]
+
+        if self.zoom_to_region:
+            zoom_box = widgets.VBox([self.adm_level, self.adm_string])
+            controls.extend(
+                [widgets.HTML("<hr style='margin:10px 0'>"), zoom_box]
+            )
+
+        if self.plot_conflict_points:
+            conflict_points_box = widgets.VBox(
+                [
+                    self.conflict_points,
+                    self.conflict_points_column,
+                ]
+            )
+            conflict_style_box = widgets.VBox(
+                [
+                    self.conflict_markerscale,
+                    self.conflict_alpha,
+                    self.conflict_legend1_y,
+                    self.conflict_legend2_y,
+                ]
             )
             controls.extend(
                 [
                     widgets.HTML("<hr style='margin:10px 0'>"),
                     widgets.HBox(
                         [
-                            osm_pois_box,
-                            osm_pois_style_box,
-                        ]
-                    ),
-                    widgets.HTML("<hr style='margin:10px 0'>"),
-                    widgets.HBox(
-                        [
-                            osm_networks_box,
-                            osm_networks_style_box,
+                            conflict_points_box,
+                            conflict_style_box,
                         ]
                     ),
                 ]
             )
 
-        hatches_box = widgets.VBox(
-            [
-                self.overlay_hatches,
-                self.all_variable_dropdown,
-                self.hatches_title,
-            ]
-        )
-        hatches_style_box = widgets.VBox(
-            [
-                self.hatches_legend_x,
-                self.hatches_legend_y,
-            ]
-        )
-        controls.extend(
-            [
-                widgets.HTML("<hr style='margin:10px 0'>"),
-                widgets.HBox([hatches_box, hatches_style_box]),
-            ]
-        )
+        if self.plot_displacement_points:
+            idp_points_box = widgets.VBox(
+                [
+                    self.idp_points,
+                    self.idp_points_column,
+                ]
+            )
+            idp_style_box = widgets.VBox(
+                [
+                    self.idp_markerscale,
+                    self.idp_alpha,
+                    self.idp_legend1_y,
+                    self.idp_legend2_y,
+                ]
+            )
+            controls.extend(
+                [
+                    widgets.HTML("<hr style='margin:10px 0'>"),
+                    widgets.HBox(
+                        [
+                            idp_points_box,
+                            idp_style_box,
+                        ]
+                    ),
+                ]
+            )
+
+        if self.geoplot.dm.config["osm_selected"]:
+            if self.plot_osm_points:
+                osm_pois_box = widgets.VBox([self.osm_poi_selector])
+                osm_pois_style_box = widgets.VBox(
+                    [
+                        self.osm_pois_markerscale,
+                        self.osm_pois_alpha,
+                        self.osm_pois_legend1_y,
+                    ]
+                )
+                controls.extend(
+                    [
+                        widgets.HTML("<hr style='margin:10px 0'>"),
+                        widgets.HBox(
+                            [
+                                osm_pois_box,
+                                osm_pois_style_box,
+                            ]
+                        ),
+                    ]
+                )
+            if self.plot_osm_networks:
+                osm_networks_box = widgets.VBox([self.osm_network_selector])
+                osm_networks_style_box = widgets.VBox(
+                    [self.osm_networks_alpha, self.osm_networks_legend1_y]
+                )
+                controls.extend(
+                    [
+                        widgets.HTML("<hr style='margin:10px 0'>"),
+                        widgets.HBox(
+                            [
+                                osm_networks_box,
+                                osm_networks_style_box,
+                            ]
+                        ),
+                    ]
+                )
 
         controls.extend(
             [
@@ -1137,76 +1324,6 @@ class MapWidget:
                 self.save_button,
             ]
         )
-
-        if self.map_mode == "choropleth":
-            controls = [
-                widgets.HBox(
-                    [
-                        self.legend_type,
-                        self.binning,
-                        self.var_bounds_selector,
-                    ]
-                )
-            ] + controls
-
-            if self.enable_conflict:
-                box = widgets.HBox(
-                    [
-                        self.conflict_data_source,
-                        self.asset,
-                        self.conflict_column,
-                    ]
-                )
-                controls.insert(0, box)
-
-            elif (
-                self.enable_conflict_exposure
-                or self.enable_hazard_exposure
-                or self.enable_mhs_exposure
-            ):
-                controls.insert(0, self.asset)
-                if self.enable_hazard_exposure:
-                    box = [self.hazard_exposure_source]
-                    box.append(self.hazard_exposure_type)
-                    box = widgets.HBox(box)
-                    controls.insert(1, box)
-                if self.enable_mhs_exposure:
-                    box = [self.hazard_category]
-                    box.append(self.hazard_exposure_type)
-                    box.append(self.mhs_aggregation)
-                    box = widgets.HBox(box)
-                    controls.insert(1, box)
-                if self.enable_conflict_exposure:
-                    box = [self.conflict_exposure_source]
-                    box.append(self.conflict_exposure_type)
-                    box = widgets.HBox(box)
-                    controls.insert(1, box)
-            else:
-                controls.insert(0, self.variable_dropdown)
-
-        else:
-            conflict_box = widgets.HBox(
-                [self.conflict_exposure_source, self.conflict_exposure_type]
-            )
-            if self.enable_hazard_exposure:
-                hazard_box = widgets.HBox(
-                    [self.hazard_exposure_source, self.hazard_exposure_type]
-                )
-            elif self.enable_mhs_exposure:
-                hazard_box = widgets.HBox(
-                    [
-                        self.hazard_category,
-                        self.hazard_exposure_type,
-                        self.mhs_aggregation,
-                    ]
-                )
-
-            controls = [
-                conflict_box,
-                hazard_box,
-                self.asset,
-                self.binning,
-            ] + controls
 
         self.controls = widgets.VBox(controls)
 
