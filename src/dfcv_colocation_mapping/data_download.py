@@ -86,7 +86,8 @@ class DatasetManager:
         group: str = "region",
         adm_source: str = "geoboundaries",
         crs: str = "EPSG:4326",
-        acled_key: str = None,
+        acled_username: str = None,
+        acled_password: str = None,
         acled_country: str = None,
         conflict_start_date: str = None,
         conflict_end_date: str = None,
@@ -117,7 +118,8 @@ class DatasetManager:
             group (str): Spatial grouping level (default: 'region').
             adm_source (str): Source of administrative boundaries (default: 'geoboundaries').
             crs (str): Coordinate reference system (default: 'EPSG:4326').
-            acled_key (str, optional): ACLED API key override (default: None).
+            acled_username (str, optional): ACLED API username (default: None).
+            acled_password (str, optional): ACLED API password (default: None).
             acled_country (str, optional): Country name for ACLED queries (default: None).
             conflict_start_date (str, optional): Conflict start date (default: None).
             conflict_end_date (str, optional): Conflict end date (default: None).
@@ -148,7 +150,6 @@ class DatasetManager:
         self.crs = crs
 
         # ACLED configuration
-        self.acled_key = acled_key
         self.acled_country = acled_country
         self.conflict_start_date = self._get_start_date(
             conflict_start_date, conflict_last_n_years
@@ -201,10 +202,10 @@ class DatasetManager:
 
         # Load API credentials (with optional overrides)
         self.acled_username = self._load_creds(
-            self.acled_cred_file, "acled_username", acled_key
+            self.acled_cred_file, "acled_username", acled_username
         )
         self.acled_password = self._load_creds(
-            self.acled_cred_file, "acled_password", acled_key
+            self.acled_cred_file, "acled_password", acled_password
         )
         self.dtm_key = self._load_creds(self.dtm_cred_file, "dtm_key", dtm_key)
         self.idmc_key = self._load_creds(
@@ -1452,6 +1453,9 @@ class DatasetManager:
                 password=self.acled_password,
                 token_url="https://acleddata.com/oauth/token",
             )
+            if acled_token is None:
+                return
+
             params = dict(
                 country=self.country,
                 event_date=f"{self.conflict_start_date}|{self.conflict_end_date}",
@@ -1649,9 +1653,10 @@ class DatasetManager:
             token_data = response.json()
             return token_data["access_token"]
         else:
-            raise Exception(
-                f"Failed to get access token: {response.status_code} {response.text}"
+            logging.info(
+                f"{WARNING}WARNING: Failed to get access token: {response.status_code} {response.text} {RESET}"
             )
+            return None
 
     def _filter_acled(
         self,
