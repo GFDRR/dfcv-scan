@@ -215,6 +215,7 @@ class DatasetManager:
         # Extract config fields
         self.acled_hierarchy = self.acled_config["acled_hierarchy"]
         self.acled_selected = self.acled_config["acled_selected"]
+        self.acled_drm_pillars = self.acled_config["acled_drm_pillars"]
         self.asset_categories = self.config["asset_categories"]
 
         # Set up data directories
@@ -1465,6 +1466,7 @@ class DatasetManager:
             headers = {
                 "Authorization": f"Bearer {acled_token}",
                 "Content-Type": "application/json",
+                "Accept": "application/json",
             }
 
             # Paginate through ACLED API results
@@ -3371,6 +3373,41 @@ class DatasetManager:
         combined = gpd.GeoDataFrame(pd.concat(ordered_gdfs, ignore_index=True))
 
         return combined
+
+    def update_acled_selected(self, drm_pillar: str = None):
+        """
+        Update the ACLED selection based on a DRM pillar.
+
+        Filters the existing ACLED configuration so that only categories,
+        subcategories, and values compatible with the specified DRM pillar
+        are retained. If no pillar is provided, the selection is returned
+        unchanged.
+
+        Args:
+            drm_pillar (str, optional): DRM pillar used to filter ACLED
+                selections. If None, no filtering is applied.
+
+        Returns:
+            dict: Updated ACLED selection dictionary.
+        """
+
+        self.acled_selected = self.acled_config["acled_selected"]
+        if drm_pillar is None:
+            return self.acled_selected
+
+        d2 = self.acled_drm_pillars[drm_pillar]
+        for sector, d1 in self.acled_selected.items():
+            self.acled_selected[sector] = {
+                cat: {
+                    key: list(set(values) & set(d2[cat][key]))
+                    for key, values in subcats.items()
+                    if key in d2[cat] and set(values) & set(d2[cat][key])
+                }
+                for cat, subcats in d1.items()
+                if cat in d2
+            }
+
+        return self.acled_selected
 
     def _assign_grouping(self, iso_code, data, config):
         """
