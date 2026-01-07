@@ -74,15 +74,20 @@ dm = data_download.DatasetManager(
 dm.download_datasets()
 geoplot = map_utils.GeoPlot(dm)
 
-# Plot assets
+# Plot bivariate choropleth map
 widget = widgets.MapWidget(
+    map_mode="bivariate_choropleth",
     geoplot=geoplot,
-    var_list=dm.asset_names,
-    var_label="Asset",
-    out_dir="assets"
+    plot_conflict_exposure=True,
+    plot_mhs_exposure=True,
+    out_dir="mhs_conflict_exposure"
 )
 widget.show()
+widget.show()
 ```
+
+### Example Output
+![title](https://github.com/GFDRR/dfcv-scan/blob/master/assets/sample_image.png?raw=true)
 
 ## Features
 - <b>Multi-Source Data Integration</b>: Combine admin boundaries (e.g., GADM, geoBoundaries), population (e.g., WorldPop, LandScan), infrastructure (e.g., WorldCover), hazards (e.g., CDRI, UNEP, JRC), conflict data (e.g., ACLED, UCDP), displacement data (e.g. IOM DTM, IDMC GIDD), and OSM layers using a unified data manager.
@@ -136,16 +141,16 @@ dm.download_datasets()
 ### Customize Datasets to Download
 To specify which datasets to download, specify the dataset category, run the following code, and save your selection before calling `dm.download_datasets()`. 
 ```py
-category = "assets" # Choose from: "assets", "hazards", "conflict", "displacement", "osm"
+data_category = "osm" # @param ["assets", "hazards", "conflict", "displacement", "osm"]
 
 def save_selection(result):
-    dm.config[f"{category}_selected"] = result
+    dm.config[f"{data_category}_selected"] = result
     dm.set_selected_datasets()
 
-selector = widgets.MultiSelectorWidget(
-    category,
-    dm.config[f"{category}_all"],
-    dm.config[f"{category}_selected"],
+selector = widgets.MultiSelector(
+    data_category,
+    dm.config[f"{data_category}_all"],
+    dm.config[f"{data_category}_selected"],
     save_callback=save_selection
 )
 selector.show()
