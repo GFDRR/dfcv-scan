@@ -1,7 +1,5 @@
 assets_selected:
     - 'worldpop'
-    - 'worldcover_builtup'
-    - 'global_bem'
     
 osm_selected:
     - 'pois'
@@ -70,10 +68,10 @@ hazards_all:
         - 'global_wildfire_gabam'
 
 asset_categories:
-    population:
+    demographic:
         - 'worldpop'
         - 'landscan'
-    infrastructure:
+    housing:
         - 'worldcover_builtup'
         - 'bem'
     agriculture:
