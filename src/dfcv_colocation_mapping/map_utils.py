@@ -48,6 +48,12 @@ from shapely.geometry import MultiPoint
 from dfcv_colocation_mapping import common_utils
 from vincenty import vincenty
 
+from folium.plugins import TimestampedGeoJson
+from shapely.geometry import mapping
+from folium import MacroElement
+from jinja2 import Template
+
+
 WARNING = "\033[31m"
 RESET = "\033[0m"
 
@@ -95,6 +101,155 @@ class GeoPlot:
         """
         if kwargs is not None:
             self.map_config[key].update(kwargs)
+
+    def plot_timestamped(
+        self,
+        data: gpd.GeoDataFrame = None,
+        period: str = "M",
+        fmap=None,
+        radius: int = 1,
+        zoom_start: int = 7,
+        date_col: str = "event_date",
+        agg_col: str = "event_period",
+    ):
+        """
+        Plot timestamped point events on a Folium map.
+
+        Aggregates point-based event data over a specified temporal period
+        (daily ("D"), monthly ("M"), or yearly ("Y")) and visualizes them using
+        a time slider via Folium's TimestampedGeoJson.
+
+        Args:
+            data (gpd.GeoDataFrame, optional): GeoDataFrame containing point
+                geometries and a datetime column.
+            period (str, optional): Pandas offset alias defining aggregation
+                period (e.g., "Y", "M", "D"). Defaults to "M".
+            fmap (folium.Map, optional): Existing Folium map to add layers to.
+                If None, a new map is created.
+            radius (int, optional): Radius multiplier for point markers.
+                Defaults to 1.
+            zoom_start (int, optional): Initial zoom level for the map.
+                Defaults to 7.
+            date_col (str, optional): Name of the datetime column in `data`.
+                Defaults to "event_date".
+            agg_col (str, optional): Name of the derived aggregation period
+                column. Defaults to "event_period".
+
+        Returns:
+            folium.Map: Folium map with timestamped event visualization.
+        """
+
+        def gdf_to_timestamped_features(gdf, time_col):
+            """Convert a GeoDataFrame into TimestampedGeoJson features."""
+            features = []
+            for index, row in gdf.iterrows():
+                row_time = row[time_col] + pd.Timedelta(hours=12)
+                features.append(
+                    {
+                        "type": "Feature",
+                        "geometry": mapping(row.geometry),
+                        "properties": {
+                            "time": row_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "icon": "circle",
+                            "iconstyle": {
+                                "radius": row["radius"],
+                                "fillColor": "red",
+                                "fillOpacity": 0.6,
+                                "stroke": False,
+                            },
+                            "tooltip": (
+                                f"Number of conflicts: {row['count']}<br>"
+                                f"Date: {row[time_col].strftime('%Y-%m-%d')}"
+                            ),
+                        },
+                    }
+                )
+            return features
+
+        # Normalize dates and derive aggregation period
+        data[date_col] = pd.to_datetime(data[date_col].dt.strftime("%Y-%m-%d"))
+        data[agg_col] = data[date_col].dt.to_period(period)
+
+        # Aggregate event counts by geometry and period
+        agg_counts = (
+            data.groupby([agg_col, "geometry"])
+            .size()
+            .rename("count")
+            .reset_index()
+        )
+        agg_counts[agg_col] = agg_counts[agg_col].dt.to_timestamp()
+        agg_counts["radius"] = agg_counts["count"] * radius
+        features = {
+            "type": "FeatureCollection",
+            "features": gdf_to_timestamped_features(agg_counts, agg_col),
+        }
+
+        # Compute map center using country centroid
+        original_crs = data.crs
+        meter_crs = data.estimate_utm_crs()
+        centroid = data.dissolve("iso_code").to_crs(meter_crs).centroid
+        transformer = pyproj.Transformer.from_crs(
+            pyproj.CRS(meter_crs),
+            pyproj.CRS(original_crs),
+            always_xy=True,
+        )
+        x, y = transformer.transform(centroid.x.iloc[0], centroid.y.iloc[0])
+
+        # Initialize map if not provided
+        if fmap is None:
+            fmap = folium.Map(location=[y, x], zoom_start=zoom_start)
+            geoboundaries = self.dm.geoboundary.dissolve("iso_code")
+            style_function = lambda x: {
+                "color": "black",
+                "weight": 0.8,
+                "fillOpacity": 0.0,
+            }
+            folium.GeoJson(
+                geoboundaries,
+                style_function=style_function,
+            ).add_to(fmap)
+
+        # Configure date display format
+        date_options = "YYYY"
+        if period == "M" or period == "D":
+            date_options += "-MM"
+            if period == "D":
+                date_options += "-DD"
+
+        # Add timestamped layer
+        TimestampedGeoJson(
+            features,
+            period=f"P1{period}",
+            duration=f"P0{period}",
+            add_last_point=False,
+            auto_play=False,
+            loop=False,
+            max_speed=10,
+            loop_button=True,
+            date_options=date_options,
+            time_slider_drag_update=True,
+        ).add_to(fmap)
+
+        # Add a static floating title
+        title_html = f"""
+        <div style="
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            font-size: 24px;
+            background-color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid gray;">
+            {self.dm.country} ACLED Conflicts
+        </div>
+        """
+        fmap.get_root().html.add_child(folium.Element(title_html))
+        fmap.save(f"{self.dm.iso_code}_folium_map.html")
+
+        return fmap
 
     def plot_folium(
         self,
