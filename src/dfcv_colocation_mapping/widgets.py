@@ -6,7 +6,7 @@ import ipywidgets as widgets
 from IPython.display import display, clear_output
 
 
-class BaseCheckboxWidget:
+class BaseSelector:
     """Base class providing common UI helpers for checkbox-based widgets."""
 
     def _make_checkbox(self, description, value=False, indent=0):
@@ -69,7 +69,7 @@ class BaseCheckboxWidget:
         return widgets.VBox([button, output])
 
 
-class HierarchicalCheckboxes(BaseCheckboxWidget):
+class HierarchicalSelector(BaseSelector):
     """Widget for displaying and managing hierarchical checkbox selections."""
 
     def __init__(
@@ -289,7 +289,7 @@ class HierarchicalCheckboxes(BaseCheckboxWidget):
         display(self.widget)
 
 
-class MultiSelectorWidget(BaseCheckboxWidget):
+class MultiSelector(BaseSelector):
     """A simple widget for selecting multiple items from a list or nested dictionary."""
 
     def __init__(self, dataset, data_all, data_selected, save_callback=None):
@@ -869,6 +869,7 @@ class MapWidget:
             var, ax, xpos = None, None, None
             zorder = 1
             if self.map_mode == "choropleth":
+
                 if self.plot_conflict:
                     if self.conflict_data_source.value.lower() == "acled":
                         var = (
@@ -880,6 +881,7 @@ class MapWidget:
                             f"{self.conflict_data_source.value.lower()}_"
                             f"total_{self.conflict_column.value}"
                         )
+
                 if self.plot_conflict_exposure:
                     var = f"{self.conflict_exposure_source.value}_{self.asset.value}_{self.conflict_exposure_type.value}"
 
@@ -925,7 +927,7 @@ class MapWidget:
                     )
                     zorder += 1
 
-            else:
+            elif self.map_mode == "bivariate_choropleth":
                 if self.plot_conflict:
                     if self.conflict_data_source.value.lower() == "acled":
                         var1 = (
@@ -937,6 +939,7 @@ class MapWidget:
                             f"{self.conflict_data_source.value.lower()}_"
                             f"total_{self.conflict_column.value}"
                         )
+
                 elif self.plot_conflict_exposure:
                     var1 = f"{self.conflict_exposure_source.value}_{self.asset.value}_{self.conflict_exposure_type.value}"
 
