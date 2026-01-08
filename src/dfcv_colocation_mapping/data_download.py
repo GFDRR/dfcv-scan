@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import copy
 import shutil
 import zipfile
 import logging
@@ -3391,7 +3392,9 @@ class DatasetManager:
             dict: Updated ACLED selection dictionary.
         """
 
-        self.acled_selected = self.acled_config["acled_selected"]
+        self.acled_selected = copy.deepcopy(
+            self.acled_config["acled_selected"]
+        )
         if drm_pillar is None:
             return self.acled_selected
 
