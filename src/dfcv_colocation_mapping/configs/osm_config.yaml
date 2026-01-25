@@ -16,12 +16,17 @@ osm_networks:
         - railway
 
 osm_pois: 
+    education:
+        - amenity:
+            - school
+            - kindergarten
     healthcare:
         - healthcare
         - amenity:
             - clinic
             - hospital
             - doctors
+            - pharmacy
     airports:
         - aeroway:
             - terminal
