@@ -675,6 +675,7 @@ class GeoPlot:
         dataset: str = "",
         asset: str = "worldpop",
         osm_tags: list = [],
+        idmc_year: int = 2024,
         value_col: str = None,
         label_col: str = None,
         title: str = None,
@@ -770,6 +771,8 @@ class GeoPlot:
         }
         try:
             data = loaders[dataset]().copy()
+            if "idmc" in dataset:
+                data = data[idmc_year]
         except KeyError:
             raise ValueError(f"Dataset not supported: {dataset}")
 
@@ -2552,7 +2555,6 @@ class GeoPlot:
             1_000,
             5_000,
             10_000,
-            20_000,
             50_000,
             100_000,
             500_000,
