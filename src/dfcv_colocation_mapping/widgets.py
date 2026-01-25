@@ -463,7 +463,9 @@ class MapWidget:
             self.var_list = [
                 var for var in self.var_list if "dtm" in var or "idmc" in var
             ]
-        self.default_var = self.var_list[0]
+        self.default_var = (
+            "worldpop" if "worldpop" in self.var_list else self.var_list[0]
+        )
 
     def _setup_adm_options(self):
         """Prepare ADM levels and region options for dropdowns."""
