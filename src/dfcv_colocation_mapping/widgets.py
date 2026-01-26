@@ -966,8 +966,6 @@ class MapWidget:
                 ax, xpos = self.geoplot.plot_bivariate_choropleth(
                     var1=var1,
                     var2=var2,
-                    # var1_bounds=[0, 1],
-                    # var2_bounds=[0, 1],
                     title=title,
                     subtitle=subtitle,
                     binning=self.binning.value,
@@ -1093,9 +1091,19 @@ class MapWidget:
 
             # Keep only ADM columns + last plotted variables
             cols = [col for col in adm_cols if col in data.columns]
+            mhs = False
             for var in self.last_vars:
                 if var in data.columns and var not in cols:
                     cols.append(var)
+                    mhs = True if "mhs" in var else mhs
+
+            if mhs:
+                hazard_cols = self.geoplot.dm.hazard_cols[
+                    self.hazard_exposure_type.value
+                ][self.hazard_category.value][self.asset.value]
+                for hazard_col in hazard_cols:
+                    if hazard_col in data.columns and hazard_col not in cols:
+                        cols.append(hazard_col)
 
             subset = data[cols].copy()
 
@@ -1103,9 +1111,7 @@ class MapWidget:
             safe_region = region_name.replace(" ", "_")
             safe_vars = "-".join([v.replace(" ", "_") for v in self.last_vars])
             filename_base = f"{safe_region}-{safe_vars}"
-            sub_folder = os.path.join(
-                base_folder, self.geoplot.dm.iso_code, self.out_dir
-            )
+            sub_folder = os.path.join(base_folder, self.out_dir)
             os.makedirs(sub_folder, exist_ok=True)
 
             # Save CSV (no geometry)
