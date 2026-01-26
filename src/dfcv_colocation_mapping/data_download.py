@@ -228,6 +228,7 @@ class DatasetManager:
         # Dataset selection and aggregation settings
         self.set_selected_datasets()
         self.mhs_aggregation = mhs_aggregation
+        self.hazard_cols = dict()
 
     def download_datasets(self):
         """Download and prepare all relevant datasets for the country."""
@@ -3018,14 +3019,18 @@ class DatasetManager:
         hazard_dicts = {**self.config["hazards_all"], "all": self.hazard_names}
 
         for suffix in suffixes:
-            for category, hazard_dict in hazard_dicts.items():
+            self.hazard_cols[suffix] = dict()
+            for category, hazards in hazard_dicts.items():
+                self.hazard_cols[suffix][category] = dict()
+                hazards = [hazard.replace("global_", "") for hazard in hazards]
                 for asset in self.asset_names:
                     hazard_cols = [
                         f"{hazard}_{asset}_{suffix}"
-                        for hazard in hazard_dict
+                        for hazard in hazards
                         if f"{hazard}_{asset}_{suffix}" in data.columns
                         and not (data[f"{hazard}_{asset}_{suffix}"] == 0).all()
                     ]
+                    self.hazard_cols[suffix][category][asset] = hazard_cols
 
                     if len(hazard_cols) == 0:
                         continue
