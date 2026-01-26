@@ -45,6 +45,17 @@ displacement_all:
 
 # https://doc.emdat.be/docs/data-structure-and-content/glossary/
 hazards_all: 
+    hydrometerological:
+        - 'global_fluvial_flood_cdri'
+        - 'global_fluvial_flood_jrc1'
+        - 'global_fluvial_flood_jrc2'
+        - 'fluvial_defended_fathom'
+        - 'pluvial_defended_fathom'
+        - 'coastal_defended_fathom'
+        - 'global_landslide_precip_gfdrr'
+        - 'global_landslide_precip_cdri'
+        - 'global_cyclone'
+        - 'global_heat_stress'
     hydrological:
         - 'global_fluvial_flood_cdri'
         - 'global_fluvial_flood_jrc1'
