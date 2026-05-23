@@ -387,6 +387,7 @@ class MapWidget:
         var_list: list = None,
         var_label: str = "Variable:",
         zoom_to_region: bool = False,
+        show_labels: bool = False,
         overwrite_titles: bool = False,
         plot_displacement: bool = False,
         plot_displacement_points: bool = False,
@@ -437,6 +438,7 @@ class MapWidget:
         self.plot_osm_points = plot_osm_points
         self.plot_osm_networks = plot_osm_networks
         self.out_dir = self._get_out_dir(out_dir)
+        self.show_labels = show_labels
 
         self.last_vars = []
         self.output = widgets.Output()
@@ -926,6 +928,7 @@ class MapWidget:
                         subtitle=subtitle,
                         binning=self.binning.value,
                         zorder=zorder,
+                        show_labels=self.show_labels,
                     )
                     zorder += 1
 
@@ -971,6 +974,7 @@ class MapWidget:
                     binning=self.binning.value,
                     zoom_to=zoom_to,
                     zorder=zorder,
+                    show_labels=self.show_labels,
                 )
                 zorder += 1
 

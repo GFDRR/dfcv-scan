@@ -346,3 +346,6 @@ annotations:
     acled: "Conflict data from Armed Conflict Location & Event Data Project (ACLED)"
     ucdp: "Conflict data from UCDP (Sundberg, Ralph, and Erik Melander, 2013)"
     landscan: "LandScan 2024 from Oak Ridge National Laboratory (Lebakula, et al., 2024)"
+
+definition:
+    

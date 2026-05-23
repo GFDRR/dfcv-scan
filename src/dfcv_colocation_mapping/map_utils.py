@@ -1246,6 +1246,7 @@ class GeoPlot:
         nbins: int = 4,
         zorder: int = 1,
         binning: str = "equal_intervals",
+        show_labels: bool = True,
         zoom_to: dict = None,
         kwargs: dict = None,
         key="choropleth",
@@ -1666,6 +1667,24 @@ class GeoPlot:
                 x=xpos,
             )
 
+        if show_labels:
+            data.apply(
+                lambda x: ax.annotate(
+                    text=x[self.dm.adm_level].replace("(", "\n("),
+                    xy=x.geometry.centroid.coords[0],
+                    ha="center",
+                    fontsize=config["fontsize"],
+                    bbox=dict(
+                        facecolor=config["label_facecolor"],
+                        edgecolor=config["label_edgecolor"],
+                        lw=config["label_linewidth"],
+                        alpha=config["label_alpha"],
+                        boxstyle=config["label_boxstyle"],
+                    ),
+                ),
+                axis=1,
+            )
+
         # Add title, subtitle, and annotations
         self._add_titles_and_annotations(
             fig, ax, config, title, subtitle, annotation, x=xpos
@@ -1691,6 +1710,7 @@ class GeoPlot:
         annotation: str = None,
         add_annotation: str = None,
         binning: str = "quantiles",
+        show_labels: bool = False,
         nbins: int = 4,
         zoom_to: dict = None,
         zorder: int = 1,
@@ -1962,6 +1982,24 @@ class GeoPlot:
         # Get title text
         if title is None:
             title = config["title"].format(var1_title, var2_title, country)
+
+        if show_labels:
+            data.apply(
+                lambda x: ax.annotate(
+                    text=x[self.dm.adm_level].replace("(", "\n("),
+                    xy=x.geometry.centroid.coords[0],
+                    ha="center",
+                    fontsize=config["fontsize"],
+                    bbox=dict(
+                        facecolor=config["label_facecolor"],
+                        edgecolor=config["label_edgecolor"],
+                        lw=config["label_linewidth"],
+                        alpha=config["label_alpha"],
+                        boxstyle=config["label_boxstyle"],
+                    ),
+                ),
+                axis=1,
+            )
 
         # Add titles and annotations with layout adjusted to legend
         self._add_titles_and_annotations(
