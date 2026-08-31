@@ -117,7 +117,7 @@ geoboundaries:
     dpi: 300
     crs: "EPSG:3857"
 
-    title: "{} Adminstrative Units"
+    title: "{} Administrative Units"
     legend_title: "Regional Groupings"
     
     title_fontsize: 15
