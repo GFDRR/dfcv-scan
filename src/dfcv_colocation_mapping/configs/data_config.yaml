@@ -149,8 +149,13 @@ urls:
     gbopen_url: "https://www.geoboundaries.org/api/current/gbOpen/"
     # Codes: https://gis.unhcr.org/arcgis/rest/services/core_v2/wrl_prp_p_unhcr_ALL/MapServer/0?f=pjson
     unhcr_url: "https://gis.unhcr.org/arcgis/rest/services/core_v2/wrl_prp_p_unhcr_ALL/FeatureServer/0/query"
-    # Source: https://hub.worldpop.org/geodata/listing?id=69
-    worldpop_url: "https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/{}/{}_ppp_2020_UNadj.tif"
+    ## Source: https://hub.worldpop.org/geodata/listing?id=69 (updated to 2025 below)
+    # worldpop_url: "https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/{}/{}_ppp_2020_UNadj.tif" (updated to 2025 below)
+    # Source: https://hub.worldpop.org/geodata/listing?id=79
+    # R2024B constrained estimates: population is allocated only to
+    # cells where built settlement is detected, which matches how this
+    # tool defines populated areas (asset > 0) in exposure calculations.
+    worldpop_url: "https://data.worldpop.org/GIS/Population/Global_2015_2030/R2024B/2025/{}/v1/100m/constrained/{}_pop_2025_CN_100m_R2024B_v1.tif"
     # Source: https://esa-worldcover.org/en/data-access, https://landcarbonlab.org/insights/global-land-cover-maps-accuracy-applications/
     worldcover_url: "https://esa-worldcover.s3.eu-central-1.amazonaws.com"
     # Source: https://helix-tools-api.idmcdb.org/external-api/?#/GIDD/gidd_disaggregations_disaggregation_geojson_retrieve
