@@ -164,8 +164,8 @@ urls:
     global_rainfall_url: "https://data.chc.ucsb.edu/products/CHIRPS/v3.0/annual/global/tifs/chirps-v3.0.2024.tif"
     # Source: https://giri.unepgrid.ch/map?view=MX-B7WR7-ZLQO2-J5OMQ&list=explore
     global_bem_url: "https://hazards-data.unepgrid.ch/bem_5x5_valfis.tif"
-    # Source: https://data.naturalcapitalproject.stanford.edu/dataset/sts-48373e687cf175d436957b3d71f36d8f2e628675861383125519d0cbd0326759?utm_source=chatgpt.com
-    global_landscan_url: "https://storage.googleapis.com/natcap-data-cache/global/landscan-pop/landscan_2023.tif"
+    # Source: https://data.naturalcapitalalliance.stanford.edu/dataset/sts-48373e687cf175d436957b3d71f36d8f2e628675861383125519d0cbd0326759 # url change (2026 Sep)
+    global_landscan_url: "https://data.naturalcapitalalliance.stanford.edu/download/global/landscan-pop/landscan_2023.tif"
     # Source: https://human-settlement.emergency.copernicus.eu/download.php?ds=builtC
     global_ghsl_url: "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_S_GLOBE_R2023A/GHS_BUILT_S_E2030_GLOBE_R2023A_54009_100/V1-0/GHS_BUILT_S_E2030_GLOBE_R2023A_54009_100_V1_0.zip"
     # Source: https://ucdp.uu.se/encyclopedia
@@ -182,8 +182,8 @@ urls:
     global_cyclone_hdx_url: "https://data.humdata.org/dataset/6366ac1f-6bed-42e9-b96e-22ef81008931/resource/202221dd-a79d-4ce5-93d7-f34f7514aeb2/download/viento-mundo-tr100-int1-g152.zip" 
     # Source: https://giri.unepgrid.ch/map?view=MX-HQYK4-ZSD45-28FOH
     global_cyclone_url: "https://hazards-data.unepgrid.ch/Wind_T250.tif"
-    # Source: https://www.drought.gov/data-download
-    global_drought_spei_url: "https://storage.googleapis.com/noaa-nidis-drought-gov-data/current-conditions/tile/v1/ce-GLOBAL-ERA5_LAND_DAILY-speih-6mo/GLOBAL-ERA5_LAND_DAILY-speih-6mo.tif"
+    # Source: https://www.drought.gov/data-download # url change : 6mo >> 180d (2026 Sep)
+    global_drought_spei_url: "https://storage.googleapis.com/noaa-nidis-drought-gov-data/current-conditions/tile/v1/ce-GLOBAL-ERA5_LAND_DAILY-speih-180d/GLOBAL-ERA5_LAND_DAILY-speih-180d.tif"
     # Source: https://zenodo.org/records/8310513
     global_heat_stress_url: "https://zenodo.org/records/8310513/files/GloUTCI-M_YEAR_2022_MONTH_10.zip"
     # Source: https://giri.unepgrid.ch/map?view=MX-6FLW2-W3L51-SNGTU
